@@ -111,12 +111,15 @@ const SEED = {
     newClients: { target: 3, actual: 2 },
     margin:  { target: 45, actual: 52 },
   },
-  monthMethods: [
-    { id:'mm1', text:'聯繫 5 位 A 級客戶介紹母親節禮盒', done:true },
-    { id:'mm2', text:'Pinkoi 上架 3 款新品、拍攝情境照', done:true },
-    { id:'mm3', text:'整理 Q1 毛利低於 40% 的品項，優化成本', done:false },
-    { id:'mm4', text:'與 2 家選品店洽談批發合作', done:false },
-    { id:'mm5', text:'IG 每週 3 則製作過程短片', done:false },
+  monthMethods: [],
+  weekPlan: [
+    [{ id:'wp_m1', text:'整理本週報價單，追蹤未回覆客戶', done:false }, { id:'wp_m2', text:'確認本週備料庫存是否足夠', done:false }],
+    [{ id:'wp_t1', text:'Pinkoi 產品頁更新圖片與描述', done:false }],
+    [{ id:'wp_w1', text:'與選品店確認批發訂單數量', done:false }, { id:'wp_w2', text:'拍攝 1 則 IG 製作過程短片', done:false }],
+    [{ id:'wp_th1', text:'整理本週收支紀錄', done:false }],
+    [{ id:'wp_f1', text:'本週訂單出貨確認', done:false }, { id:'wp_f2', text:'追蹤貨款入帳狀況', done:false }],
+    [{ id:'wp_sa1', text:'快閃市集備貨與展示準備', done:false }],
+    [{ id:'wp_su1', text:'下週行動清單規劃', done:false }],
   ],
   quotes: [
     { id:'q1', num:'QT-2026-0418', client:'青田茶事', grand: 29820, tax:5, date:'2026-04-12', valid:'2026-05-12',
