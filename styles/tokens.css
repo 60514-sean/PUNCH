@@ -1,0 +1,49 @@
+/* 碰器嚴選系統 — Design tokens */
+:root {
+  /* Warm handmade palette */
+  --paper:        #F5EFE6;
+  --paper-deep:   #EBE2D3;
+  --paper-soft:   #FAF6EF;
+  --ink:          #2B1F14;
+  --ink-soft:     #4A3A2A;
+  --ink-mute:     #8A7963;
+  --ink-faint:    #B4A88F;
+  --rule:         #DDD1BC;
+  --rule-soft:    #E8DDC8;
+
+  --clay:         #8B5A3C;          /* primary warm brown */
+  --clay-deep:    #6E4227;
+  --clay-soft:    #B88868;
+  --clay-tint:    #F1E3D4;
+
+  --sage:         #7A8B6C;          /* secondary green */
+  --sage-tint:    #E5E9DD;
+
+  --terracotta:   #B85450;          /* alert / negative */
+  --terracotta-tint:#F2DDDB;
+
+  --ochre:        #C28C3F;          /* warning / highlight */
+  --ochre-tint:   #F3E5CA;
+
+  --moss:         #567047;          /* positive */
+  --moss-tint:    #DCE4D1;
+
+  /* Radii */
+  --r-sm: 6px;
+  --r:    10px;
+  --r-lg: 14px;
+
+  /* Shadows — paper stack */
+  --sh-1: 0 1px 0 rgba(61,40,23,0.04), 0 1px 3px rgba(61,40,23,0.06);
+  --sh-2: 0 1px 0 rgba(61,40,23,0.05), 0 4px 14px rgba(61,40,23,0.08);
+  --sh-up: 0 -2px 14px rgba(61,40,23,0.08);
+
+  /* Type scale */
+  --f-serif: 'Noto Serif TC', 'Cormorant Garamond', Georgia, serif;
+  --f-sans:  'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif;
+  --f-mono:  'JetBrains Mono', 'DM Mono', monospace;
+
+  /* Layout */
+  --sidebar-w: 248px;
+  --content-max: 1240px;
+}
