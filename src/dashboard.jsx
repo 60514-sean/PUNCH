@@ -62,71 +62,74 @@ const Dashboard = ({ state, setState, goto, openTask, openOrder, ...props }) => 
         </div>
       </div>
 
-      <MonthGoalMethod state={state} setState={setState} income={income} orders={orders} customers={state.customers}/>
+      <div className="dash-grid">
+        {/* 左欄：目標 */}
+        <MonthGoalMethod state={state} setState={setState} income={income}/>
 
-      {/* 月度目標 */}
-      <div className="card">
-        <div className="card-head">
-          <div className="card-title">月度目標</div>
-          <div className="card-subtle">{thisMonth.replace('-','年')+' 月達成率'}</div>
-        </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:14 }}>
-          <GoalRow label="月營收目標" value={income} max={goals.revenue.target} color="var(--clay)" fmt={(v)=>fmtMoney(v,true)}/>
-          <GoalRow label="訂單數" value={goals.orders.actual} max={goals.orders.target} color="var(--sage)" fmt={v=>v+' 筆'}/>
-          <GoalRow label="新客戶" value={goals.newClients.actual} max={goals.newClients.target} color="var(--ochre)" fmt={v=>v+' 位'}/>
-          <GoalRow label="平均毛利率" value={goals.margin.actual} max={goals.margin.target} color="var(--moss)" fmt={v=>v+'%'}/>
-        </div>
-      </div>
-
-      {/* 今日待辦 */}
-      <div className="card">
-        <div className="card-head">
-          <div>
-            <div className="card-title">今日待辦</div>
-            <div className="card-subtle">{todayTasks.length} 項未完成</div>
-          </div>
-          <button className="btn btn-ghost btn-sm" onClick={()=>setTaskAdding(a=>!a)}>
-            <Icon name={taskAdding?'check':'plus'} size={12}/> {taskAdding?'完成':'新增'}
-          </button>
-        </div>
-
-        {taskAdding && (
-          <div style={{ display:'flex', gap:6, marginBottom:12 }}>
-            <input className="input" autoFocus placeholder="輸入待辦事項，按 Enter 新增"
-              value={taskInput} onChange={e=>setTaskInput(e.target.value)}
-              onKeyDown={e=>{ if(e.key==='Enter') addTaskInline(); if(e.key==='Escape'){ setTaskAdding(false); setTaskInput(''); } }}/>
-            <button className="btn btn-primary btn-sm" onClick={addTaskInline}>加入</button>
-          </div>
-        )}
-
-        <div style={{ display:'flex', flexDirection:'column' }}>
-          {tasks.slice(0,8).map(t=>(
-            <div key={t.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'1px solid var(--rule-soft)' }}>
-              <button onClick={()=>toggleTask(t.id)} style={{
-                width:20, height:20, borderRadius:5, border:'1.5px solid '+(t.done?'var(--moss)':'var(--ink-faint)'),
-                background: t.done?'var(--moss)':'transparent', display:'flex',alignItems:'center',justifyContent:'center',
-                cursor:'pointer', color:'var(--paper-soft)', flexShrink:0
-              }}>
-                {t.done && <Icon name="check" size={12}/>}
-              </button>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div className="task-title" style={{ color: t.done?'var(--ink-faint)':'var(--ink)', textDecoration: t.done?'line-through':'none' }}>{t.title}</div>
-                <div className="task-meta" style={{ display:'flex', gap:8 }}>
-                  <span>{t.due}</span>
-                  {t.priority==='high' && <Pill tone="terracotta">重要</Pill>}
-                  {t.priority==='mid' && <Pill tone="ochre">一般</Pill>}
-                </div>
-              </div>
+        {/* 右欄：月度進度 + 今日待辦 */}
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <div className="card">
+            <div className="card-head">
+              <div className="card-title">月度達成</div>
+              <div className="card-subtle">{thisMonth.replace('-','年')+' 月'}</div>
             </div>
-          ))}
+            <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+              <GoalRow label="月營收" value={income} max={goals.revenue.target} color="var(--clay)" fmt={v=>fmtMoney(v,true)}/>
+              <GoalRow label="訂單數" value={goals.orders.actual} max={goals.orders.target} color="var(--sage)" fmt={v=>v+' 筆'}/>
+              <GoalRow label="新客戶" value={goals.newClients.actual} max={goals.newClients.target} color="var(--ochre)" fmt={v=>v+' 位'}/>
+              <GoalRow label="毛利率" value={goals.margin.actual} max={goals.margin.target} color="var(--moss)" fmt={v=>v+'%'}/>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-head">
+              <div>
+                <div className="card-title">今日待辦</div>
+                <div className="card-subtle">{todayTasks.length} 項未完成</div>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setTaskAdding(a=>!a)}>
+                <Icon name={taskAdding?'check':'plus'} size={12}/> {taskAdding?'完成':'新增'}
+              </button>
+            </div>
+
+            {taskAdding && (
+              <div style={{ display:'flex', gap:6, marginBottom:12 }}>
+                <input className="input" autoFocus placeholder="輸入待辦，按 Enter 新增"
+                  value={taskInput} onChange={e=>setTaskInput(e.target.value)}
+                  onKeyDown={e=>{ if(e.key==='Enter') addTaskInline(); if(e.key==='Escape'){ setTaskAdding(false); setTaskInput(''); } }}/>
+                <button className="btn btn-primary btn-sm" onClick={addTaskInline}>加入</button>
+              </div>
+            )}
+
+            <div style={{ display:'flex', flexDirection:'column' }}>
+              {tasks.slice(0,10).map(t=>(
+                <div key={t.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'1px solid var(--rule-soft)' }}>
+                  <button onClick={()=>toggleTask(t.id)} style={{
+                    width:20, height:20, borderRadius:5, border:'1.5px solid '+(t.done?'var(--moss)':'var(--ink-faint)'),
+                    background: t.done?'var(--moss)':'transparent', display:'flex', alignItems:'center', justifyContent:'center',
+                    cursor:'pointer', color:'var(--paper-soft)', flexShrink:0
+                  }}>
+                    {t.done && <Icon name="check" size={12}/>}
+                  </button>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div className="task-title" style={{ color: t.done?'var(--ink-faint)':'var(--ink)', textDecoration: t.done?'line-through':'none' }}>{t.title}</div>
+                    <div className="task-meta" style={{ display:'flex', gap:8 }}>
+                      <span>{t.due}</span>
+                      {t.priority==='high' && <Pill tone="terracotta">重要</Pill>}
+                      {t.priority==='mid' && <Pill tone="ochre">一般</Pill>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {tasks.length===0 && <EmptyState icon="task" title="今日無待辦"/>}
+            </div>
+          </div>
         </div>
       </div>
 
       <style>{`
-        .grid-2-1 { display: grid; grid-template-columns: 1.7fr 1fr; gap: 14px; }
-        @media (max-width: 900px) {
-          .grid-2-1 { grid-template-columns: 1fr; }
-        }
+        .dash-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 14px; align-items: start; }
+        @media (max-width: 900px) { .dash-grid { grid-template-columns: 1fr; } }
       `}</style>
     </div>
   );
