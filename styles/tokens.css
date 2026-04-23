@@ -39,9 +39,9 @@
   --sh-up: 0 -2px 14px rgba(61,40,23,0.08);
 
   /* Type scale */
-  --f-serif: 'Noto Serif TC', 'Cormorant Garamond', Georgia, serif;
-  --f-sans:  'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif;
-  --f-mono:  'JetBrains Mono', 'DM Mono', monospace;
+  --f-serif: 'Noto Serif TC', serif;
+  --f-sans:  'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', sans-serif;
+  --f-mono:  'JetBrains Mono', monospace;
 
   /* Layout */
   --sidebar-w: 248px;
