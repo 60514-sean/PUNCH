@@ -212,6 +212,8 @@ const DualLine = ({ data }) => {
 };
 
 // ═══ 本月目標與作法 ═══
+const DAYS = ['一','二','三','四','五','六','日'];
+
 const MonthGoalMethod = ({ state, setState, income, orders, customers }) => {
   const { goals } = state;
   const methods = state.monthMethods || [];
@@ -245,86 +247,127 @@ const MonthGoalMethod = ({ state, setState, income, orders, customers }) => {
   };
 
   const revPct = goals.revenue.target ? Math.min(100, Math.round(income/goals.revenue.target*100)) : 0;
-  const ordPct = goals.orders.target ? Math.min(100, Math.round(goals.orders.actual/goals.orders.target*100)) : 0;
 
   const addMethod = () => {
     if (!draft.trim()) return;
-    setState(s => ({ ...s, monthMethods: [...(s.monthMethods||[]), { id:'mm_'+Date.now(), text: draft.trim(), done:false }] }));
+    setState(s => ({ ...s, monthMethods: [...(s.monthMethods||[]), { id:'mm_'+Date.now(), text: draft.trim(), days:[false,false,false,false,false,false,false] }] }));
     setDraft('');
   };
-  const toggle = (id) => setState(s => ({ ...s, monthMethods: (s.monthMethods||[]).map(m => m.id===id?{...m, done:!m.done}:m) }));
+  const toggleDay = (id, dayIdx) => setState(s => ({ ...s, monthMethods: (s.monthMethods||[]).map(m => m.id===id ? { ...m, days: (m.days||[false,false,false,false,false,false,false]).map((v,i)=>i===dayIdx?!v:v) } : m) }));
   const del = (id) => setState(s => ({ ...s, monthMethods: (s.monthMethods||[]).filter(m => m.id!==id) }));
 
-  const doneCount = methods.filter(m=>m.done).length;
+  const totalChecked = methods.reduce((a,m)=>(a + (m.days||[]).filter(Boolean).length), 0);
 
   return (
-    <div className="card" style={{ padding:0, overflow:'hidden', background:'linear-gradient(180deg, var(--clay-tint) 0%, var(--paper-soft) 60%)' }}>
-      <div style={{ padding:'18px 20px', borderBottom:'1px solid var(--rule-soft)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+    <div className="card" style={{ padding:0, overflow:'hidden' }}>
+      {/* Card header */}
+      <div style={{ padding:'14px 18px', borderBottom:'1px solid var(--rule-soft)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
         <div>
-          <div className="eyebrow" style={{ marginBottom:4 }}>{goals.month.replace('-','年 ')+' 月'} · 本月目標</div>
-          {goalEdit ? (
-            <div style={{ display:'flex', flexDirection:'column', gap:10, marginTop:8 }}>
-              <div className="row">
-                <div className="field"><label>營收目標（元）</label><input className="input mono" type="number" value={goalDraft.revenue} onChange={e=>setGoalDraft({...goalDraft,revenue:e.target.value})}/></div>
-                <div className="field"><label>訂單目標（筆）</label><input className="input mono" type="number" value={goalDraft.orders} onChange={e=>setGoalDraft({...goalDraft,orders:e.target.value})}/></div>
-              </div>
-              <div className="row">
-                <div className="field"><label>新客目標（位）</label><input className="input mono" type="number" value={goalDraft.newClients} onChange={e=>setGoalDraft({...goalDraft,newClients:e.target.value})}/></div>
-                <div className="field"><label>毛利率目標（%）</label><input className="input mono" type="number" value={goalDraft.margin} onChange={e=>setGoalDraft({...goalDraft,margin:e.target.value})}/></div>
-              </div>
-              <div style={{ display:'flex', gap:8 }}>
-                <button className="btn btn-primary btn-sm" onClick={saveGoals}>儲存目標</button>
-                <button className="btn btn-ghost btn-sm" onClick={()=>setGoalEdit(false)}>取消</button>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div style={{ fontSize:20, fontWeight:700, lineHeight:1.3, color:'var(--ink)' }}>
-                月營收目標 <span style={{ color:'var(--clay)' }}>{fmtMoney(goals.revenue.target, true)}</span>
-                <span style={{ color:'var(--sage)', marginLeft:10, fontWeight:700 }}>已達 {revPct}%</span>
-              </div>
-              <div style={{ fontSize:13, color:'var(--ink-mute)', marginTop:6 }}>訂單 {goals.orders.actual}/{goals.orders.target} · 新客 {goals.newClients.actual}/{goals.newClients.target} · 毛利率 {goals.margin.actual}%</div>
-            </>
-          )}
+          <div className="eyebrow">{goals.month.replace('-','年 ')+' 月'} · 本月目標</div>
         </div>
-        <div style={{ textAlign:'right', display:'flex', flexDirection:'column', alignItems:'flex-end', gap:8 }}>
-          <button className="btn btn-ghost btn-sm" onClick={openGoalEdit}><Icon name="edit" size={13}/> 設定目標</button>
-          {!goalEdit && <>
-            <div style={{ fontSize:12, color:'var(--ink-mute)', letterSpacing:'0.6px' }}>作法完成</div>
-            <div style={{ fontSize:20, fontWeight:700 }}><span style={{ color:'var(--sage)' }}>{doneCount}</span> <span style={{ color:'var(--ink-mute)', fontSize:15 }}>/ {methods.length || '—'}</span></div>
-          </>}
-        </div>
+        <button className="btn btn-ghost btn-sm" onClick={openGoalEdit}><Icon name="edit" size={13}/> 編輯</button>
       </div>
 
-      <div style={{ padding:'14px 20px 18px' }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-          <div style={{ fontSize:13, fontWeight:700, color:'var(--ink-soft)', letterSpacing:'0.6px' }}>作法 / 行動清單</div>
+      {/* Goal edit form */}
+      {goalEdit && (
+        <div style={{ padding:'14px 18px', borderBottom:'1px solid var(--rule-soft)', background:'var(--paper-deep)' }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            <div className="row">
+              <div className="field"><label>營收目標（元）</label><input className="input mono" type="number" value={goalDraft.revenue} onChange={e=>setGoalDraft({...goalDraft,revenue:e.target.value})}/></div>
+              <div className="field"><label>訂單目標（筆）</label><input className="input mono" type="number" value={goalDraft.orders} onChange={e=>setGoalDraft({...goalDraft,orders:e.target.value})}/></div>
+            </div>
+            <div className="row">
+              <div className="field"><label>新客目標（位）</label><input className="input mono" type="number" value={goalDraft.newClients} onChange={e=>setGoalDraft({...goalDraft,newClients:e.target.value})}/></div>
+              <div className="field"><label>毛利率目標（%）</label><input className="input mono" type="number" value={goalDraft.margin} onChange={e=>setGoalDraft({...goalDraft,margin:e.target.value})}/></div>
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button className="btn btn-primary btn-sm" onClick={saveGoals}>儲存目標</button>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setGoalEdit(false)}>取消</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Goal stats */}
+      {!goalEdit && (
+        <div style={{ padding:'14px 18px', borderBottom:'1px solid var(--rule-soft)' }}>
+          <div style={{ fontSize:20, fontWeight:700, lineHeight:1.3, color:'var(--ink)' }}>
+            月營收目標 <span style={{ color:'var(--clay)' }}>{fmtMoney(goals.revenue.target, true)}</span>
+            <span style={{ color:'var(--sage)', marginLeft:10, fontWeight:700 }}>已達 {revPct}%</span>
+          </div>
+          <div style={{ fontSize:13, color:'var(--ink-mute)', marginTop:6 }}>訂單 {goals.orders.actual}/{goals.orders.target} · 新客 {goals.newClients.actual}/{goals.newClients.target} · 毛利率 {goals.margin.actual}%</div>
+        </div>
+      )}
+
+      {/* Weekly action list */}
+      <div style={{ padding:'14px 18px 18px' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'var(--ink-soft)', letterSpacing:'0.5px' }}>
+            作法 / 行動清單
+            {totalChecked>0 && <span style={{ marginLeft:8, fontWeight:400, color:'var(--sage)', fontFamily:'var(--f-mono)' }}>{totalChecked} 天已打卡</span>}
+          </div>
           <button className="btn btn-ghost btn-sm" onClick={()=>setEditing(e=>!e)}>
-            <Icon name={editing?'check':'edit'} size={12}/> {editing?'完成':'編輯'}
+            <Icon name={editing?'check':'plus'} size={12}/> {editing?'完成':'新增'}
           </button>
         </div>
 
         {methods.length===0 && !editing && (
-          <div style={{ fontSize:13, color:'var(--ink-mute)', padding:'10px 0' }}>尚未設定本月作法。點「編輯」開始新增。</div>
+          <div style={{ fontSize:13, color:'var(--ink-mute)', padding:'6px 0' }}>尚未設定本月作法，點「新增」開始。</div>
         )}
 
-        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-          {methods.map((m, i) => (
-            <div key={m.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', background:'var(--paper-soft)', borderRadius:6, border:'1px solid var(--rule-soft)' }}>
-              <button onClick={()=>toggle(m.id)} style={{ width:18, height:18, borderRadius:4, border:'1.5px solid '+(m.done?'var(--sage)':'var(--ink-faint)'), background: m.done?'var(--sage)':'transparent', cursor:'pointer', padding:0, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                {m.done && <Icon name="check" size={10} style={{ color:'#fff' }}/>}
-              </button>
-              <div style={{ flex:1, fontSize:14, color: m.done?'var(--ink-mute)':'var(--ink)', textDecoration: m.done?'line-through':'none', minWidth:0, lineHeight:1.5 }}>
-                <span style={{ color:'var(--ink-faint)', marginRight:6, fontFamily:'var(--f-mono)', fontSize:12 }}>{String(i+1).padStart(2,'0')}</span>
-                {m.text}
-              </div>
-              {editing && <button className="btn btn-ghost btn-sm" onClick={()=>del(m.id)} style={{ padding:'3px 6px' }}><Icon name="x" size={11}/></button>}
-            </div>
-          ))}
-        </div>
+        {methods.length>0 && (
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', minWidth:360 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign:'left', fontSize:11, color:'var(--ink-mute)', fontWeight:500, paddingBottom:8, paddingRight:8 }}>行動</th>
+                  {DAYS.map(d=>(
+                    <th key={d} style={{ textAlign:'center', fontSize:12, color:'var(--ink-mute)', fontWeight:600, paddingBottom:8, minWidth:28 }}>{d}</th>
+                  ))}
+                  {editing && <th style={{ width:28 }}></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {methods.map((m,i) => {
+                  const days = m.days || [false,false,false,false,false,false,false];
+                  const checked = days.filter(Boolean).length;
+                  return (
+                    <tr key={m.id} style={{ borderTop:'1px solid var(--rule-soft)' }}>
+                      <td style={{ padding:'9px 8px 9px 0', fontSize:13, color:'var(--ink)', lineHeight:1.4, minWidth:0 }}>
+                        <span style={{ color:'var(--ink-faint)', fontFamily:'var(--f-mono)', fontSize:11, marginRight:5 }}>{String(i+1).padStart(2,'0')}</span>
+                        {m.text}
+                        {checked>0 && <span style={{ marginLeft:6, fontSize:11, color:'var(--sage)', fontFamily:'var(--f-mono)' }}>{checked}/7</span>}
+                      </td>
+                      {days.map((v,di)=>(
+                        <td key={di} style={{ textAlign:'center', padding:'9px 2px' }}>
+                          <button onClick={()=>toggleDay(m.id, di)} style={{
+                            width:22, height:22, borderRadius:5,
+                            border:'1.5px solid '+(v?'var(--sage)':'var(--rule)'),
+                            background: v?'var(--sage)':'transparent',
+                            cursor:'pointer', padding:0,
+                            display:'inline-flex', alignItems:'center', justifyContent:'center',
+                          }}>
+                            {v && <Icon name="check" size={11} style={{ color:'#fff' }}/>}
+                          </button>
+                        </td>
+                      ))}
+                      {editing && (
+                        <td style={{ textAlign:'center', padding:'9px 0 9px 4px' }}>
+                          <button className="btn btn-ghost btn-sm" onClick={()=>del(m.id)} style={{ padding:'3px 5px' }}>
+                            <Icon name="close" size={10}/>
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {editing && (
-          <div style={{ display:'flex', gap:6, marginTop:10 }}>
+          <div style={{ display:'flex', gap:6, marginTop:12 }}>
             <input className="input" placeholder="例：聯繫 5 位 A 級客戶做新品試水溫" value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')addMethod();}}/>
             <button className="btn btn-primary btn-sm" onClick={addMethod}><Icon name="plus" size={12}/> 新增</button>
           </div>
