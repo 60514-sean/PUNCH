@@ -166,7 +166,7 @@ input, select, textarea { font-family: inherit; color: inherit; }
   border: 1px solid var(--rule);
   border-radius: 7px;
   padding: 9px 11px;
-  font-size: 14px; color: var(--ink);
+  font-size: 16px; color: var(--ink);
   transition: border-color 0.14s, background 0.14s;
   outline: none;
 }
@@ -459,7 +459,7 @@ body.forced-mobile .row, body.forced-mobile .row-3 { grid-template-columns: 1fr 
 
 /* Forms */
 .in-phone .row, .in-phone .row-3 { grid-template-columns: 1fr !important; gap: 10px !important; }
-.in-phone .input, .in-phone .select, .in-phone .textarea { font-size: 14px !important; padding: 10px 12px !important; }
+.in-phone .input, .in-phone .select, .in-phone .textarea { font-size: 16px !important; padding: 10px 12px !important; }
 
 /* Segmented controls: wrap to rows */
 .in-phone .seg, .in-phone .tabs-row { flex-wrap: wrap !important; gap: 6px !important; }
