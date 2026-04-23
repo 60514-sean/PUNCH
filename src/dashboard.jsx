@@ -164,9 +164,9 @@ const Dashboard = ({ state, setState, goto, openTask, openOrder, ...props }) => 
                   {t.done && <Icon name="check" size={11}/>}
                 </button>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:13, color: t.done?'var(--ink-faint)':'var(--ink)', textDecoration: t.done?'line-through':'none' }}>{t.title}</div>
-                  <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2, display:'flex', gap:8 }}>
-                    <span><Icon name="calendar" size={10} style={{ verticalAlign:-1, marginRight:3 }}/>{t.due}</span>
+                  <div className="task-title" style={{ color: t.done?'var(--ink-faint)':'var(--ink)', textDecoration: t.done?'line-through':'none' }}>{t.title}</div>
+                  <div className="task-meta" style={{ display:'flex', gap:8 }}>
+                    <span>{t.due}</span>
                     {t.priority==='high' && <Pill tone="terracotta">重要</Pill>}
                     {t.priority==='mid' && <Pill tone="ochre">一般</Pill>}
                   </div>
@@ -194,12 +194,12 @@ const Dashboard = ({ state, setState, goto, openTask, openOrder, ...props }) => 
                     <Icon name="alert" size={16}/>
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:13, fontWeight:600, color:'var(--ink)' }}>{s.name}</div>
-                    <div style={{ fontSize:11, color:'var(--ink-mute)' }}>{s.cat} · 底線 {s.min} {s.unit}</div>
+                    <div className="alert-name">{s.name}</div>
+                    <div className="alert-meta">{s.cat} · 底線 {s.min} {s.unit}</div>
                   </div>
                   <div style={{ textAlign:'right' }}>
-                    <div className="mono" style={{ fontSize:16, fontWeight:700, color:'var(--terracotta)' }}>{s.qty}</div>
-                    <div style={{ fontSize:10, color:'var(--ink-mute)' }}>{s.unit}</div>
+                    <div className="mono alert-qty" style={{ color:'var(--terracotta)' }}>{s.qty}</div>
+                    <div className="alert-unit">{s.unit}</div>
                   </div>
                 </div>
               ))}
@@ -230,8 +230,8 @@ const Dashboard = ({ state, setState, goto, openTask, openOrder, ...props }) => 
               {recentOrders.map(o=>(
                 <tr key={o.id} className="clickable" onClick={()=>openOrder(o.id)}>
                   <td>
-                    <div className="mono" style={{ fontSize:11, color:'var(--ink-mute)' }}>{o.no}</div>
-                    <div style={{ fontSize:13, marginTop:2, color:'var(--ink-soft)' }}>{o.product.length>20?o.product.slice(0,20)+'…':o.product}</div>
+                    <div className="mono" style={{ fontSize:12, color:'var(--ink-mute)' }}>{o.no}</div>
+                    <div style={{ fontSize:14, marginTop:2, color:'var(--ink-soft)' }}>{o.product.length>20?o.product.slice(0,20)+'…':o.product}</div>
                   </td>
                   <td style={{ fontWeight:600 }}>{o.client}</td>
                   <td><Pill tone={STATUS_COLOR[o.status]}>{o.status}</Pill></td>
@@ -268,11 +268,11 @@ const Dashboard = ({ state, setState, goto, openTask, openOrder, ...props }) => 
           {topCustomers.map(c=>(
             <div key={c.id} style={{ padding:'14px 16px', background:'var(--paper-deep)', borderRadius:8, display:'flex', flexDirection:'column', gap:6 }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                <span style={{ fontFamily:'var(--f-serif)', fontSize:15, fontWeight:600 }}>{c.name}</span>
+                <span className="customer-card-name">{c.name}</span>
                 <Pill tone={c.tier==='A'?'clay':c.tier==='B'?'sage':'outline'}>{c.tier} 級</Pill>
               </div>
-              <div className="mono" style={{ fontSize:18, fontWeight:600, color:'var(--ink)' }}>{fmtMoney(c.total, true)}</div>
-              <div style={{ fontSize:11, color:'var(--ink-mute)' }}>{c.orders} 筆訂單 · 最近 {fmtDateFull(c.last)}</div>
+              <div className="mono customer-card-total">{fmtMoney(c.total, true)}</div>
+              <div className="customer-card-meta">{c.orders} 筆訂單 · 最近 {fmtDateFull(c.last)}</div>
             </div>
           ))}
         </div>
@@ -297,8 +297,8 @@ const GoalRow = ({ label, value, max, color, fmt }) => {
   return (
     <div>
       <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-        <span style={{ fontSize:12, color:'var(--ink-soft)' }}>{label}</span>
-        <span className="mono" style={{ fontSize:12, color:'var(--ink)' }}>
+        <span className="goal-row-label">{label}</span>
+        <span className="mono goal-row-val">
           <span style={{ fontWeight:700 }}>{fmt(value)}</span>
           <span style={{ color:'var(--ink-faint)' }}> / {fmt(max)}</span>
         </span>
@@ -306,7 +306,7 @@ const GoalRow = ({ label, value, max, color, fmt }) => {
       <div className="bar">
         <div className="bar-fill" style={{ width: pct*100+'%', background: color }}/>
       </div>
-      <div style={{ fontSize:10, color: pct>=1?'var(--moss)':'var(--ink-mute)', marginTop:4, fontFamily:'var(--f-mono)' }}>
+      <div className="goal-row-pct mono" style={{ color: pct>=1?'var(--moss)':'var(--ink-mute)' }}>
         {Math.round(pct*100)}% {pct>=1?'· 已達成':''}
       </div>
     </div>
@@ -395,18 +395,18 @@ const MonthGoalMethod = ({ state, setState, income, orders, customers }) => {
       <div style={{ padding:'18px 20px', borderBottom:'1px solid var(--rule-soft)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
         <div>
           <div className="eyebrow" style={{ marginBottom:4 }}>{goals.month.replace('-','年 ')+' 月'} · 本月目標</div>
-          <div style={{ fontFamily:'var(--f-serif)', fontSize:22, fontWeight:700, lineHeight:1.2 }}>月營收 <span style={{ color:'var(--clay)' }}>{fmtMoney(goals.revenue.target, true)}</span> <span style={{ fontSize:14, color:'var(--ink-mute)', fontWeight:500 }}>已達 {revPct}%</span></div>
-          <div style={{ fontSize:12, color:'var(--ink-mute)', marginTop:4 }}>訂單 {goals.orders.actual}/{goals.orders.target} · 新客 {goals.newClients.actual}/{goals.newClients.target} · 毛利率 {goals.margin.actual}%</div>
+          <div style={{ fontSize:22, fontWeight:700, lineHeight:1.2 }}>月營收 <span style={{ color:'var(--clay)' }}>{fmtMoney(goals.revenue.target, true)}</span> <span style={{ fontSize:15, color:'var(--ink-mute)', fontWeight:500 }}>已達 {revPct}%</span></div>
+          <div style={{ fontSize:13, color:'var(--ink-mute)', marginTop:6 }}>訂單 {goals.orders.actual}/{goals.orders.target} · 新客 {goals.newClients.actual}/{goals.newClients.target} · 毛利率 {goals.margin.actual}%</div>
         </div>
         <div style={{ textAlign:'right' }}>
-          <div style={{ fontSize:11, color:'var(--ink-mute)', letterSpacing:'1px' }}>作法完成</div>
-          <div style={{ fontFamily:'var(--f-serif)', fontSize:20, fontWeight:700 }}><span style={{ color:'var(--sage)' }}>{doneCount}</span> <span style={{ color:'var(--ink-mute)', fontSize:14 }}>/ {methods.length || '—'}</span></div>
+          <div style={{ fontSize:12, color:'var(--ink-mute)', letterSpacing:'0.6px' }}>作法完成</div>
+          <div style={{ fontSize:20, fontWeight:700 }}><span style={{ color:'var(--sage)' }}>{doneCount}</span> <span style={{ color:'var(--ink-mute)', fontSize:15 }}>/ {methods.length || '—'}</span></div>
         </div>
       </div>
 
       <div style={{ padding:'14px 20px 18px' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-          <div style={{ fontSize:12, fontWeight:700, color:'var(--ink-soft)', letterSpacing:'1.4px' }}>作法 / 行動清單</div>
+          <div style={{ fontSize:13, fontWeight:700, color:'var(--ink-soft)', letterSpacing:'0.6px' }}>作法 / 行動清單</div>
           <button className="btn btn-ghost btn-sm" onClick={()=>setEditing(e=>!e)}>
             <Icon name={editing?'check':'edit'} size={12}/> {editing?'完成':'編輯'}
           </button>
@@ -422,8 +422,8 @@ const MonthGoalMethod = ({ state, setState, income, orders, customers }) => {
               <button onClick={()=>toggle(m.id)} style={{ width:18, height:18, borderRadius:4, border:'1.5px solid '+(m.done?'var(--sage)':'var(--ink-faint)'), background: m.done?'var(--sage)':'transparent', cursor:'pointer', padding:0, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                 {m.done && <Icon name="check" size={10} style={{ color:'#fff' }}/>}
               </button>
-              <div style={{ flex:1, fontSize:13, color: m.done?'var(--ink-mute)':'var(--ink)', textDecoration: m.done?'line-through':'none', minWidth:0 }}>
-                <span style={{ color:'var(--ink-faint)', marginRight:6, fontFamily:'var(--f-mono)', fontSize:11 }}>{String(i+1).padStart(2,'0')}</span>
+              <div style={{ flex:1, fontSize:14, color: m.done?'var(--ink-mute)':'var(--ink)', textDecoration: m.done?'line-through':'none', minWidth:0, lineHeight:1.5 }}>
+                <span style={{ color:'var(--ink-faint)', marginRight:6, fontFamily:'var(--f-mono)', fontSize:12 }}>{String(i+1).padStart(2,'0')}</span>
                 {m.text}
               </div>
               {editing && <button className="btn btn-ghost btn-sm" onClick={()=>del(m.id)} style={{ padding:'3px 6px' }}><Icon name="x" size={11}/></button>}

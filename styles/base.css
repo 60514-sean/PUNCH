@@ -609,3 +609,62 @@ body.forced-mobile .mob-cards { display: flex !important; }
     grid-template-columns: 1fr !important;
   }
 }
+
+/* ═══ 全域識讀性保底 ═══ */
+
+/* mob-card 內文字最小 13px */
+.mob-card { font-size: 14px; line-height: 1.6; }
+.mob-card .mono { font-size: 12px !important; }
+
+/* 卡片內 metadata 最小 13px */
+.card { font-size: 14px; line-height: 1.6; }
+
+/* topbar 副標題 */
+.topbar-l .sub { font-size: 14px; color: var(--ink-mute); line-height: 1.6; }
+
+/* 月目標 header */
+.goal-header-label { font-size: 12px; font-weight: 600; color: var(--ink-mute); letter-spacing: 0.6px; text-transform: uppercase; }
+
+/* progress label */
+.goal-row-label { font-size: 13px; color: var(--ink-soft); }
+.goal-row-val { font-size: 13px; font-weight: 600; }
+.goal-row-pct { font-size: 12px; color: var(--ink-mute); margin-top: 4px; }
+
+/* 待辦、庫存警示 */
+.task-title { font-size: 14px; line-height: 1.5; }
+.task-meta  { font-size: 12px; color: var(--ink-mute); margin-top: 2px; }
+.alert-name { font-size: 14px; font-weight: 600; }
+.alert-meta { font-size: 12px; color: var(--ink-mute); margin-top: 2px; }
+.alert-qty  { font-size: 18px; font-weight: 700; }
+.alert-unit { font-size: 12px; color: var(--ink-mute); }
+
+/* 客戶卡 */
+.customer-card-name  { font-size: 15px; font-weight: 600; }
+.customer-card-total { font-size: 18px; font-weight: 700; }
+.customer-card-meta  { font-size: 12px; color: var(--ink-mute); margin-top: 4px; }
+
+/* 數字標註 */
+.tbl td.order-no  { font-size: 12px; color: var(--ink-mute); font-family: var(--f-mono); }
+.tbl td.order-product { font-size: 14px; margin-top: 3px; color: var(--ink-soft); }
+
+/* 手機版 mob-card 欄位 */
+.mob-card-no      { font-size: 12px; color: var(--ink-mute); font-family: var(--f-mono); }
+.mob-card-client  { font-size: 15px; font-weight: 700; margin-top: 2px; }
+.mob-card-product { font-size: 13px; color: var(--ink-soft); line-height: 1.5; margin-bottom: 8px; }
+.mob-card-meta    { font-size: 12px; color: var(--ink-mute); }
+.mob-card-profit  { font-size: 12px; color: var(--moss); margin-top: 2px; font-family: var(--f-mono); }
+.mob-card-amount  { font-size: 18px; font-weight: 700; font-family: var(--f-mono); }
+
+/* 同步 chip */
+.sync-chip { font-size: 13px; }
+
+/* 表格欄位 */
+.tbl th { font-size: 12px; }
+.tbl td { font-size: 14px; }
+
+/* 手機版底部導覽字 */
+@media (max-width: 900px) {
+  .mobile-nav button span { font-size: 11px; }
+  .topbar-l .sub { font-size: 13px; }
+  .mob-card-amount { font-size: 17px; }
+}

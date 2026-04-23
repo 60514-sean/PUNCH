@@ -109,15 +109,15 @@ const OrdersView = ({ state, setState, openOrder, pendingNew, clearPendingNew })
               return (
                 <tr key={o.id} className="clickable" onClick={()=>openEdit(o)}>
                   <td>
-                    <div className="mono" style={{ fontSize:11, color:'var(--ink-mute)' }}>{o.no}</div>
-                    <div style={{ fontSize:13, marginTop:3, color:'var(--ink-soft)' }}>{o.product}</div>
+                    <div className="mono" style={{ fontSize:12, color:'var(--ink-mute)' }}>{o.no}</div>
+                    <div style={{ fontSize:14, marginTop:3, color:'var(--ink-soft)' }}>{o.product}</div>
                   </td>
                   <td style={{ fontWeight:600 }}>{o.client}</td>
                   <td><Pill tone={STATUS_COLOR[o.status]}>{o.status}</Pill></td>
                   <td className="num" style={{ fontWeight:700, color:'var(--ink)' }}>{fmtMoney(o.amount)}</td>
                   <td className="num">
                     <div style={{ color:'var(--moss)', fontWeight:600 }}>{fmtMoney(profit)}</div>
-                    <div style={{ fontSize:10, color:'var(--ink-mute)' }}>{pct}%</div>
+                    <div style={{ fontSize:12, color:'var(--ink-mute)' }}>{pct}%</div>
                   </td>
                   <td className="num" style={{ color:'var(--ink-mute)' }}>{fmtDateFull(o.date)}</td>
                   <td style={{ width:28, textAlign:'right' }}><Icon name="chevron" size={14} style={{ color:'var(--ink-faint)' }}/></td>
@@ -135,18 +135,18 @@ const OrdersView = ({ state, setState, openOrder, pendingNew, clearPendingNew })
               <div key={o.id} className="mob-card" onClick={()=>openEdit(o)}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8, marginBottom:6 }}>
                   <div style={{ minWidth:0, flex:1 }}>
-                    <div className="mono" style={{ fontSize:10, color:'var(--ink-mute)' }}>{o.no}</div>
-                    <div style={{ fontSize:14, fontWeight:700, marginTop:2 }}>{o.client}</div>
+                    <div className="mob-card-no">{o.no}</div>
+                    <div className="mob-card-client">{o.client}</div>
                   </div>
                   <Pill tone={STATUS_COLOR[o.status]}>{o.status}</Pill>
                 </div>
-                <div style={{ fontSize:12, color:'var(--ink-soft)', lineHeight:1.5, marginBottom:8 }}>{o.product}</div>
+                <div className="mob-card-product">{o.product}</div>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', paddingTop:8, borderTop:'1px dashed var(--rule-soft)' }}>
                   <div>
-                    <div style={{ fontSize:10, color:'var(--ink-mute)' }}>交期 {fmtDateFull(o.date)}</div>
-                    <div className="mono" style={{ fontSize:11, color:'var(--moss)', marginTop:2 }}>毛利 {fmtMoney(profit)} · {pct}%</div>
+                    <div className="mob-card-meta">交期 {fmtDateFull(o.date)}</div>
+                    <div className="mob-card-profit">毛利 {fmtMoney(profit)} · {pct}%</div>
                   </div>
-                  <div className="mono" style={{ fontSize:17, fontWeight:700 }}>{fmtMoney(o.amount)}</div>
+                  <div className="mob-card-amount">{fmtMoney(o.amount)}</div>
                 </div>
               </div>
             );
