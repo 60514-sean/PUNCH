@@ -1,5 +1,8 @@
 // 碰器嚴選系統 — App shell + routing
-const { useState: useSt, useEffect: useEf } = React;
+const { useState: useSt, useEffect: useEf, useRef: useRef } = React;
+
+// 部署 GAS 後填入網址
+const GAS_URL = window.GAS_URL || '';
 
 const NAV = [
   { group:'營運', items:[
@@ -65,22 +68,22 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "greet_name": "宇澄"
 }/*EDITMODE-END*/;
 
+function mergeWithSeed(parsed) {
+  const fresh = JSON.parse(JSON.stringify(window.SEED));
+  Object.keys(fresh).forEach(k => { if (!(k in parsed)) parsed[k] = fresh[k]; });
+  return purgeOldTrash(parsed);
+}
+
 function App(){
   const [state, setState] = useSt(()=>{
     try {
       const saved = localStorage.getItem('bangqi_state');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Migrate: ensure any new SEED keys exist in persisted state
-        const fresh = JSON.parse(JSON.stringify(window.SEED));
-        Object.keys(fresh).forEach(k => {
-          if (!(k in parsed)) parsed[k] = fresh[k];
-        });
-        return purgeOldTrash(parsed);
-      }
+      if (saved) return mergeWithSeed(JSON.parse(saved));
     } catch(e){}
     return JSON.parse(JSON.stringify(window.SEED));
   });
+  const [syncStatus, setSyncStatus] = useSt('idle'); // idle | syncing | ok | error
+  const saveTimer = useRef(null);
   const urlParams = new URLSearchParams(window.location.search);
   const forcedPage = urlParams.get('page');
   const embedded = window.self !== window.top;
@@ -130,7 +133,38 @@ function App(){
     window.parent.postMessage({ type:'__edit_mode_set_keys', edits:{ [k]: v }}, '*');
   };
 
-  useEf(()=>{ localStorage.setItem('bangqi_state', JSON.stringify(state)); }, [state]);
+  // 啟動時從 GAS 載入最新資料
+  useEf(()=>{
+    if (!GAS_URL) return;
+    fetch(GAS_URL)
+      .then(r => r.json())
+      .then(res => {
+        if (res.ok && res.data) {
+          const merged = mergeWithSeed(res.data);
+          setState(merged);
+          localStorage.setItem('bangqi_state', JSON.stringify(merged));
+        }
+      })
+      .catch(()=>{});
+  }, []);
+
+  // 狀態變更時存 localStorage + 防抖儲存 GAS
+  useEf(()=>{
+    localStorage.setItem('bangqi_state', JSON.stringify(state));
+    if (!GAS_URL) return;
+    clearTimeout(saveTimer.current);
+    setSyncStatus('syncing');
+    saveTimer.current = setTimeout(()=>{
+      fetch(GAS_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action:'save', data: state }),
+      })
+        .then(r => r.json())
+        .then(res => setSyncStatus(res.ok ? 'ok' : 'error'))
+        .catch(()=> setSyncStatus('error'));
+    }, 1500);
+  }, [state]);
+
   useEf(()=>{ localStorage.setItem('bangqi_page', page); }, [page]);
 
   const goto = (p, opts={}) => {
@@ -209,7 +243,10 @@ function App(){
           ))}
 
           <div className="sidebar-footer">
-            <div className="sync-chip"><span className="dot"/>雲端同步中 · 剛剛</div>
+            <div className="sync-chip">
+              <span className="dot" style={{ background: syncStatus==='error'?'#c0392b': syncStatus==='syncing'?'#e6a817':'#6B8E5A' }}/>
+              { !GAS_URL ? '本機模式' : syncStatus==='syncing' ? '同步中…' : syncStatus==='error' ? '同步失敗' : '已同步' }
+            </div>
           </div>
         </aside>
 
@@ -244,7 +281,10 @@ function App(){
             </div>
           ))}
           <div style={{ marginTop:14 }}>
-            <div className="sync-chip"><span className="dot"/>雲端同步中 · 剛剛</div>
+            <div className="sync-chip">
+              <span className="dot" style={{ background: syncStatus==='error'?'#c0392b': syncStatus==='syncing'?'#e6a817':'#6B8E5A' }}/>
+              { !GAS_URL ? '本機模式' : syncStatus==='syncing' ? '同步中…' : syncStatus==='error' ? '同步失敗' : '已同步' }
+            </div>
           </div>
         </div>
       </div>
