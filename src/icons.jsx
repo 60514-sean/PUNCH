@@ -53,14 +53,14 @@ const Icon = ({ name, size=18, style={}, className='' }) => {
 
 // ─── Utilities ───
 const fmtMoney = (n, compact=false) => {
-  if (n==null || isNaN(n)) return '$0';
+  if (n==null || isNaN(n)) return '0';
   const neg = n < 0;
   const abs = Math.abs(Math.round(n));
   if (compact && abs >= 10000) {
-    if (abs >= 100000000) return (neg?'-$':'$') + (abs/100000000).toFixed(1) + '億';
-    if (abs >= 10000) return (neg?'-$':'$') + (abs/10000).toFixed(abs >= 100000 ? 0 : 1) + '萬';
+    if (abs >= 100000000) return (neg?'-':'') + (abs/100000000).toFixed(1) + '億';
+    if (abs >= 10000) return (neg?'-':'') + (abs/10000).toFixed(abs >= 100000 ? 0 : 1) + '萬';
   }
-  return (neg?'-$':'$') + abs.toLocaleString();
+  return (neg?'-':'') + abs.toLocaleString();
 };
 const fmtPct = n => (n==null || isNaN(n)) ? '--' : (n>0?'+':'') + Math.round(n*10)/10 + '%';
 const fmtDate = (s) => {

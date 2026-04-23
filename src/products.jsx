@@ -2,6 +2,7 @@
 const { useState: useStateP, useMemo: useMemoP } = React;
 
 const ProductsView = ({ state, setState }) => {
+  const [tab, setTab] = useStateP('saved'); // saved | calc
   const [modalOpen, setModalOpen] = useStateP(false);
   const [editingId, setEditingId] = useStateP(null);
   const [form, setForm] = useStateP(emptyP());
@@ -59,12 +60,15 @@ const ProductsView = ({ state, setState }) => {
           <div className="sub">{stats.count} 項產品 · 平均毛利 {stats.grossAvg}% / 淨利 {stats.netAvg}%</div>
         </div>
         <div className="topbar-r">
-          <button className="btn btn-primary" onClick={openNew}><Icon name="plus" size={14}/> 新增產品</button>
+          {tab==='saved' && <button className="btn btn-primary" onClick={openNew}><Icon name="plus" size={14}/> 新增產品</button>}
         </div>
       </div>
 
-      <div className="grid-2-1-p">
-        {/* Product list */}
+      <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
+        <Segmented options={[{value:'saved',label:'已儲存產品'},{value:'calc',label:'快速試算'}]} value={tab} onChange={setTab}/>
+      </div>
+
+      {tab==='saved' && (
         <div className="card">
           <div className="card-head"><div className="card-title">已儲存產品</div><div className="card-subtle">點選卡片檢視／編輯</div></div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px,1fr))', gap:12 }}>
@@ -96,8 +100,9 @@ const ProductsView = ({ state, setState }) => {
           </div>
           {state.products.filter(p=>!p._deleted).length===0 && <EmptyState icon="product" title="尚無產品"/>}
         </div>
+      )}
 
-        {/* Quick calculator */}
+      {tab==='calc' && (
         <div className="card">
           <div className="card-head"><div className="card-title">快速試算</div><div className="card-subtle">不儲存，僅供估算</div></div>
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
@@ -140,7 +145,7 @@ const ProductsView = ({ state, setState }) => {
             )}
           </div>
         </div>
-      </div>
+      )}
 
       <Modal open={modalOpen} onClose={()=>setModalOpen(false)} title={editingId?'編輯產品':'新增產品'}
         footer={<>
@@ -228,7 +233,6 @@ const ProductsView = ({ state, setState }) => {
         </div>
       </Modal>
 
-      <style>{`.grid-2-1-p { display:grid; grid-template-columns: 1.5fr 1fr; gap:14px; } @media (max-width:900px){.grid-2-1-p{grid-template-columns:1fr;}}`}</style>
     </div>
   );
 };
@@ -321,21 +325,21 @@ const QuotesView = ({ state, setState }) => {
                 <div className="field"><label>報價日期</label><input className="input" type="date" value={current.date} onChange={e=>setCurrent({...current,date:e.target.value})}/></div>
               </div>
               <div className="field"><label>我方公司</label><input className="input" value={current.myco} onChange={e=>setCurrent({...current,myco:e.target.value})}/></div>
-              <div className="row-3">
+              <div className="row">
                 <div className="field"><label>姓名</label><input className="input" value={current.myName} onChange={e=>setCurrent({...current,myName:e.target.value})}/></div>
                 <div className="field"><label>電話</label><input className="input" value={current.myPhone} onChange={e=>setCurrent({...current,myPhone:e.target.value})}/></div>
-                <div className="field"><label>Email</label><input className="input" value={current.myEmail} onChange={e=>setCurrent({...current,myEmail:e.target.value})}/></div>
               </div>
+              <div className="field"><label>Email</label><input className="input" value={current.myEmail} onChange={e=>setCurrent({...current,myEmail:e.target.value})}/></div>
               <hr className="hr-soft"/>
               <div className="field"><label>客戶名稱<span className="req">*</span></label>
                 <input className="input" list="quote-clients" value={current.client} onChange={e=>setCurrent({...current,client:e.target.value})}/>
                 <datalist id="quote-clients">{state.customers.map(c=><option key={c.id} value={c.name}/>)}</datalist>
               </div>
-              <div className="row-3">
+              <div className="row">
                 <div className="field"><label>聯絡人</label><input className="input" value={current.cName} onChange={e=>setCurrent({...current,cName:e.target.value})}/></div>
                 <div className="field"><label>電話</label><input className="input" value={current.cPhone} onChange={e=>setCurrent({...current,cPhone:e.target.value})}/></div>
-                <div className="field"><label>Email</label><input className="input" value={current.cEmail} onChange={e=>setCurrent({...current,cEmail:e.target.value})}/></div>
               </div>
+              <div className="field"><label>客戶 Email</label><input className="input" value={current.cEmail} onChange={e=>setCurrent({...current,cEmail:e.target.value})}/></div>
               <div className="row">
                 <div className="field"><label>有效期限</label><input className="input" type="date" value={current.valid} onChange={e=>setCurrent({...current,valid:e.target.value})}/></div>
                 <div className="field"><label>稅率 %</label><input className="input mono" type="number" value={current.tax} onChange={e=>setCurrent({...current,tax:e.target.value})}/></div>

@@ -53,12 +53,11 @@ input, select, textarea { font-family: inherit; color: inherit; }
   width: 36px; height: 36px; border-radius: 8px;
   background: var(--ink); color: var(--paper);
   display:flex; align-items:center; justify-content:center;
-  font-family: var(--f-serif); font-size: 19px; font-weight:700;
-  letter-spacing: -0.02em;
+  font-family: var(--f-sans); font-size: 18px; font-weight:700;
 }
 .brand-text { line-height: 1.15; }
-.brand-text .name { font-family: var(--f-serif); font-size: 15px; font-weight:700; color: var(--ink); }
-.brand-text .tag  { font-size: 10px; color: var(--ink-mute); letter-spacing: 1.2px; text-transform: uppercase; margin-top:2px; }
+.brand-text .name { font-family: var(--f-sans); font-size: 15px; font-weight:700; color: var(--ink); }
+.brand-text .tag  { font-size: 11px; color: var(--ink-mute); letter-spacing: 0.6px; text-transform: uppercase; margin-top:2px; }
 
 .nav-group { }
 .nav-group-label {
@@ -137,8 +136,8 @@ input, select, textarea { font-family: inherit; color: inherit; }
 .btn-ink { background: var(--ink); color: var(--paper-soft); }
 .btn-ink:hover { background: var(--ink-soft); }
 .btn-danger { background: var(--terracotta-tint); color: var(--terracotta); border-color: transparent; }
-.btn-sm { padding: 6px 10px; font-size: 12px; border-radius: 6px; }
-.btn-lg { padding: 12px 18px; font-size: 14px; }
+.btn-sm { padding: 7px 12px; font-size: 13px; border-radius: 7px; }
+.btn-lg { padding: 11px 18px; font-size: 15px; }
 .btn .ic { width:14px; height:14px; stroke: currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
 
 /* ═══ Pills / Tags ═══ */

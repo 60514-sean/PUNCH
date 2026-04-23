@@ -58,7 +58,7 @@ const MOBILE_NAV = [
   { key:'orders', label:'訂單', icon:'orders' },
   { key:'finance', label:'收支', icon:'finance' },
   { key:'inventory', label:'庫存', icon:'inventory' },
-  { key:'more', label:'更多', icon:'menu' },
+  { key:'product', label:'成本', icon:'product' },
 ];
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
@@ -213,7 +213,6 @@ function App(){
           <div className="name">碰器嚴選</div>
         </div>
         <div className="m-actions">
-          <button className="icon-btn" onClick={()=>setTaskOpen(true)}><Icon name="plus" size={16}/></button>
           <button className="icon-btn" onClick={()=>setMenuOpen(true)}><Icon name="menu" size={16}/></button>
         </div>
       </div>

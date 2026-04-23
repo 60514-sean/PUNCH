@@ -60,62 +60,21 @@ const Dashboard = ({ state, setState, goto, openTask, openOrder, ...props }) => 
           <h1 className="h1">{getGreeting()}，{props.tweaks?.greet_name||'康老闆'}</h1>
           <div className="sub">這個月已完成 {orders.filter(o=>o.status==='已完成').length} 筆訂單，{pendingOrders.length} 筆仍進行中。</div>
         </div>
-        <div className="topbar-r">
-          <button className="btn btn-ghost" onClick={()=>goto('finance')}><Icon name="finance" size={14}/> 收支</button>
-          <button className="btn btn-primary" onClick={()=>goto('orders', { openNew:true })}><Icon name="plus" size={14}/> 新增訂單</button>
-        </div>
       </div>
 
       <MonthGoalMethod state={state} setState={setState} income={income} orders={orders} customers={state.customers}/>
 
-      {/* KPI */}
-      <div className="kpi-row">
-        <div className="kpi kpi-income">
-          <div className="kpi-head"><span className="kpi-lab">本月收入</span><span className="kpi-ic"><Icon name="arrowUp" size={12}/></span></div>
-          <div className="kpi-val mono-val">{fmtMoney(income, true)}</div>
-          <div className={'kpi-foot '+(incDelta>=0?'up':'down')}><Icon name={incDelta>=0?'arrowUp':'arrowDown'} size={10}/> 較上月 {fmtPct(incDelta)}</div>
+      {/* 月度目標 */}
+      <div className="card">
+        <div className="card-head">
+          <div className="card-title">月度目標</div>
+          <div className="card-subtle">{thisMonth.replace('-','年')+' 月達成率'}</div>
         </div>
-        <div className="kpi kpi-expense">
-          <div className="kpi-head"><span className="kpi-lab">本月支出</span><span className="kpi-ic"><Icon name="arrowDown" size={12}/></span></div>
-          <div className="kpi-val mono-val" style={{ color:'var(--terracotta)' }}>{fmtMoney(expense, true)}</div>
-          <div className="kpi-foot muted">{monthFinances.filter(f=>f.type==='expense').length} 筆紀錄</div>
-        </div>
-        <div className="kpi kpi-net">
-          <div className="kpi-head"><span className="kpi-lab">淨利</span><span className="kpi-ic"><Icon name="finance" size={12}/></span></div>
-          <div className="kpi-val mono-val" style={{ color:'var(--clay)' }}>{fmtMoney(net, true)}</div>
-          <div className="kpi-foot muted">毛利率 {income?Math.round(net/income*100):0}%</div>
-        </div>
-        <div className="kpi kpi-orders">
-          <div className="kpi-head"><span className="kpi-lab">進行中訂單</span><span className="kpi-ic"><Icon name="orders" size={12}/></span></div>
-          <div className="kpi-val">{pendingOrders.length}<span className="kpi-unit">筆</span></div>
-          <div className="kpi-foot muted">待收 {fmtMoney(pendingOrders.reduce((a,b)=>a+b.amount,0), true)}</div>
-        </div>
-      </div>
-
-      {/* 現金流 + 月度目標 */}
-      <div className="grid-2-1">
-        <div className="card">
-          <div className="card-head">
-            <div>
-              <div className="card-title">現金流趨勢</div>
-              <div className="card-subtle">近 6 個月 · 收入／支出／淨利</div>
-            </div>
-            <div style={{ display:'flex', gap:14, fontSize:12, color:'var(--ink-mute)' }}>
-              <span style={{ display:'inline-flex',alignItems:'center',gap:5 }}><span style={{ width:10,height:2,background:'var(--clay)',display:'inline-block' }}/>收入</span>
-              <span style={{ display:'inline-flex',alignItems:'center',gap:5 }}><span style={{ width:10,height:2,background:'var(--terracotta)',display:'inline-block' }}/>支出</span>
-              <span style={{ display:'inline-flex',alignItems:'center',gap:5 }}><span style={{ width:10,height:2,background:'var(--sage)',display:'inline-block' }}/>淨利</span>
-            </div>
-          </div>
-          <DualLine data={trend}/>
-        </div>
-        <div className="card">
-          <div className="card-head"><div className="card-title">月度目標</div><div className="card-subtle">{thisMonth.replace('-','年')+' 月達成率'}</div></div>
-          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-            <GoalRow label="月營收目標" value={income} max={goals.revenue.target} color="var(--clay)" fmt={(v)=>fmtMoney(v,true)}/>
-            <GoalRow label="訂單數" value={goals.orders.actual} max={goals.orders.target} color="var(--sage)" fmt={v=>v+' 筆'}/>
-            <GoalRow label="新客戶" value={goals.newClients.actual} max={goals.newClients.target} color="var(--ochre)" fmt={v=>v+' 位'}/>
-            <GoalRow label="平均毛利率" value={goals.margin.actual} max={goals.margin.target} color="var(--moss)" fmt={v=>v+'%'}/>
-          </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:14 }}>
+          <GoalRow label="月營收目標" value={income} max={goals.revenue.target} color="var(--clay)" fmt={(v)=>fmtMoney(v,true)}/>
+          <GoalRow label="訂單數" value={goals.orders.actual} max={goals.orders.target} color="var(--sage)" fmt={v=>v+' 筆'}/>
+          <GoalRow label="新客戶" value={goals.newClients.actual} max={goals.newClients.target} color="var(--ochre)" fmt={v=>v+' 位'}/>
+          <GoalRow label="平均毛利率" value={goals.margin.actual} max={goals.margin.target} color="var(--moss)" fmt={v=>v+'%'}/>
         </div>
       </div>
 
@@ -258,6 +217,32 @@ const MonthGoalMethod = ({ state, setState, income, orders, customers }) => {
   const methods = state.monthMethods || [];
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState('');
+  const [goalEdit, setGoalEdit] = React.useState(false);
+  const [goalDraft, setGoalDraft] = React.useState({});
+
+  const openGoalEdit = () => {
+    setGoalDraft({
+      revenue: goals.revenue.target,
+      orders: goals.orders.target,
+      newClients: goals.newClients.target,
+      margin: goals.margin.target,
+    });
+    setGoalEdit(true);
+  };
+  const saveGoals = () => {
+    setState(s => ({
+      ...s,
+      goals: {
+        ...s.goals,
+        revenue:    { ...s.goals.revenue,    target: Number(goalDraft.revenue)    || s.goals.revenue.target },
+        orders:     { ...s.goals.orders,     target: Number(goalDraft.orders)     || s.goals.orders.target },
+        newClients: { ...s.goals.newClients, target: Number(goalDraft.newClients) || s.goals.newClients.target },
+        margin:     { ...s.goals.margin,     target: Number(goalDraft.margin)     || s.goals.margin.target },
+      }
+    }));
+    setGoalEdit(false);
+    toast('目標已更新');
+  };
 
   const revPct = goals.revenue.target ? Math.min(100, Math.round(income/goals.revenue.target*100)) : 0;
   const ordPct = goals.orders.target ? Math.min(100, Math.round(goals.orders.actual/goals.orders.target*100)) : 0;
@@ -277,15 +262,37 @@ const MonthGoalMethod = ({ state, setState, income, orders, customers }) => {
       <div style={{ padding:'18px 20px', borderBottom:'1px solid var(--rule-soft)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
         <div>
           <div className="eyebrow" style={{ marginBottom:4 }}>{goals.month.replace('-','年 ')+' 月'} · 本月目標</div>
-          <div style={{ fontSize:20, fontWeight:700, lineHeight:1.3, color:'var(--ink)' }}>
-            月營收目標 <span style={{ color:'var(--clay)' }}>{fmtMoney(goals.revenue.target, true)}</span>
-            <span style={{ color:'var(--sage)', marginLeft:10, fontWeight:700 }}>已達 {revPct}%</span>
-          </div>
-          <div style={{ fontSize:13, color:'var(--ink-mute)', marginTop:6 }}>訂單 {goals.orders.actual}/{goals.orders.target} · 新客 {goals.newClients.actual}/{goals.newClients.target} · 毛利率 {goals.margin.actual}%</div>
+          {goalEdit ? (
+            <div style={{ display:'flex', flexDirection:'column', gap:10, marginTop:8 }}>
+              <div className="row">
+                <div className="field"><label>營收目標（元）</label><input className="input mono" type="number" value={goalDraft.revenue} onChange={e=>setGoalDraft({...goalDraft,revenue:e.target.value})}/></div>
+                <div className="field"><label>訂單目標（筆）</label><input className="input mono" type="number" value={goalDraft.orders} onChange={e=>setGoalDraft({...goalDraft,orders:e.target.value})}/></div>
+              </div>
+              <div className="row">
+                <div className="field"><label>新客目標（位）</label><input className="input mono" type="number" value={goalDraft.newClients} onChange={e=>setGoalDraft({...goalDraft,newClients:e.target.value})}/></div>
+                <div className="field"><label>毛利率目標（%）</label><input className="input mono" type="number" value={goalDraft.margin} onChange={e=>setGoalDraft({...goalDraft,margin:e.target.value})}/></div>
+              </div>
+              <div style={{ display:'flex', gap:8 }}>
+                <button className="btn btn-primary btn-sm" onClick={saveGoals}>儲存目標</button>
+                <button className="btn btn-ghost btn-sm" onClick={()=>setGoalEdit(false)}>取消</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize:20, fontWeight:700, lineHeight:1.3, color:'var(--ink)' }}>
+                月營收目標 <span style={{ color:'var(--clay)' }}>{fmtMoney(goals.revenue.target, true)}</span>
+                <span style={{ color:'var(--sage)', marginLeft:10, fontWeight:700 }}>已達 {revPct}%</span>
+              </div>
+              <div style={{ fontSize:13, color:'var(--ink-mute)', marginTop:6 }}>訂單 {goals.orders.actual}/{goals.orders.target} · 新客 {goals.newClients.actual}/{goals.newClients.target} · 毛利率 {goals.margin.actual}%</div>
+            </>
+          )}
         </div>
-        <div style={{ textAlign:'right' }}>
-          <div style={{ fontSize:12, color:'var(--ink-mute)', letterSpacing:'0.6px' }}>作法完成</div>
-          <div style={{ fontSize:20, fontWeight:700 }}><span style={{ color:'var(--sage)' }}>{doneCount}</span> <span style={{ color:'var(--ink-mute)', fontSize:15 }}>/ {methods.length || '—'}</span></div>
+        <div style={{ textAlign:'right', display:'flex', flexDirection:'column', alignItems:'flex-end', gap:8 }}>
+          <button className="btn btn-ghost btn-sm" onClick={openGoalEdit}><Icon name="edit" size={13}/> 設定目標</button>
+          {!goalEdit && <>
+            <div style={{ fontSize:12, color:'var(--ink-mute)', letterSpacing:'0.6px' }}>作法完成</div>
+            <div style={{ fontSize:20, fontWeight:700 }}><span style={{ color:'var(--sage)' }}>{doneCount}</span> <span style={{ color:'var(--ink-mute)', fontSize:15 }}>/ {methods.length || '—'}</span></div>
+          </>}
         </div>
       </div>
 

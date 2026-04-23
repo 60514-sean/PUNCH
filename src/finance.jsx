@@ -1,6 +1,43 @@
 // 碰器嚴選系統 — Finance + Inventory views
 const { useState: useStateF, useMemo: useMemoF } = React;
 
+// 現金流折線圖（從 dashboard 移入）
+const DualLine = ({ data }) => {
+  const height = 220;
+  const pad = { t:14, r:10, b:28, l:48 };
+  const w = 600; const h = height;
+  const innerW = w - pad.l - pad.r;
+  const innerH = h - pad.t - pad.b;
+  const maxY = Math.max(...data.map(d=>Math.max(d.income,d.expense,d.net)), 0);
+  const minY = Math.min(...data.map(d=>Math.min(d.income,d.expense,d.net,0)), 0);
+  const range = maxY - minY || 1;
+  const xStep = innerW / (data.length-1 || 1);
+  const yFor = v => pad.t + (1 - (v-minY)/range) * innerH;
+  const mk = key => data.map((d,i)=>[pad.l + i*xStep, yFor(d[key])]);
+  const lineOf = (pts) => 'M '+pts.map(([x,y])=>`${x} ${y}`).join(' L ');
+  const incPts = mk('income'), expPts = mk('expense'), netPts = mk('net');
+  const yTicks = [0, 0.33, 0.66, 1].map(t => minY + (maxY-minY)*(1-t));
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ width:'100%', height, display:'block' }} preserveAspectRatio="xMidYMid meet">
+      <defs><linearGradient id="areaInc2" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="var(--clay)" stopOpacity="0.18"/><stop offset="100%" stopColor="var(--clay)" stopOpacity="0"/></linearGradient></defs>
+      {yTicks.map((v,i)=>(
+        <g key={i}>
+          <line x1={pad.l} x2={w-pad.r} y1={yFor(v)} y2={yFor(v)} stroke="var(--rule-soft)" strokeWidth="1" strokeDasharray="2 3"/>
+          <text x={pad.l-8} y={yFor(v)+3} textAnchor="end" fontSize="11" fill="var(--ink-mute)" fontFamily="var(--f-mono)">{fmtMoney(v, true)}</text>
+        </g>
+      ))}
+      {data.map((d,i)=>(
+        <text key={i} x={pad.l + i*xStep} y={h-pad.b+16} textAnchor="middle" fontSize="11" fill="var(--ink-mute)" fontFamily="var(--f-mono)">{d.label}</text>
+      ))}
+      <path d={`${lineOf(incPts)} L ${pad.l+innerW} ${h-pad.b} L ${pad.l} ${h-pad.b} Z`} fill="url(#areaInc2)"/>
+      <path d={lineOf(expPts)} stroke="var(--terracotta)" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 4"/>
+      <path d={lineOf(netPts)} stroke="var(--sage)" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d={lineOf(incPts)} stroke="var(--clay)" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+      {incPts.map(([x,y],i)=><circle key={i} cx={x} cy={y} r="3" fill="var(--paper-soft)" stroke="var(--clay)" strokeWidth="1.8"/>)}
+    </svg>
+  );
+};
+
 const FinanceView = ({ state, setState }) => {
   const [mode, setMode] = useStateF('month'); // month | all
   const [monthKey, setMonthKey] = useStateF(state.goals.month);
@@ -33,6 +70,19 @@ const FinanceView = ({ state, setState }) => {
   const income = listRaw.filter(x=>x.type==='income').reduce((a,b)=>a+b.amount,0);
   const expense = listRaw.filter(x=>x.type==='expense').reduce((a,b)=>a+b.amount,0);
   const net = income - expense;
+
+  const trendData = useMemoF(()=>{
+    const now = new Date();
+    return Array.from({length:6},(_,i)=>{
+      const d = new Date(now.getFullYear(), now.getMonth()-5+i, 1);
+      const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+      const label = (d.getMonth()+1)+'月';
+      const recs = state.finances.filter(x=>!x._deleted && ym(x.date)===key);
+      const inc = recs.filter(x=>x.type==='income').reduce((a,b)=>a+b.amount,0);
+      const exp = recs.filter(x=>x.type==='expense').reduce((a,b)=>a+b.amount,0);
+      return { label, income:inc, expense:exp, net:inc-exp };
+    });
+  }, [state.finances]);
 
   const openNew = () => { setForm(emptyF()); setEditingId(null); setModalOpen(true); };
   const openEdit = (f) => { setForm({...f}); setEditingId(f.id); setModalOpen(true); };
@@ -72,6 +122,20 @@ const FinanceView = ({ state, setState }) => {
           <button className="btn btn-primary" onClick={openNew}><Icon name="plus" size={14}/> 新增</button>
         </div>
       </div>
+
+      {trendData.some(d=>d.income||d.expense) && (
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">現金流趨勢</div>
+            <div className="card-subtle" style={{ display:'flex', gap:14, fontSize:11 }}>
+              <span style={{ color:'var(--clay)' }}>— 收入</span>
+              <span style={{ color:'var(--terracotta)' }}>--- 支出</span>
+              <span style={{ color:'var(--sage)' }}>— 淨利</span>
+            </div>
+          </div>
+          <DualLine data={trendData}/>
+        </div>
+      )}
 
       <div className="card flat" style={{ padding:0 }}>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)' }} className="fin-kpi">
