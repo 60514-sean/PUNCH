@@ -1,17 +1,23 @@
 // 碰器嚴選系統 — Dashboard view
 const { useMemo, useState } = React;
 
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 12) return '早安';
+  if (h >= 12 && h < 17) return '午安';
+  if (h >= 17 && h < 21) return '晚安';
+  return '深夜好';
+}
+
 const Dashboard = ({ state, setState, goto, openTask, openOrder, ...props }) => {
-  const { orders, finances, stocks, goals, tasks, customers } = state;
+  const { orders, finances, stocks, goals, tasks } = state;
   const thisMonth = goals.month;
 
-  // Current month income/expense
   const monthFinances = finances.filter(f => ym(f.date) === thisMonth);
   const income = monthFinances.filter(f=>f.type==='income').reduce((a,b)=>a+b.amount,0);
   const expense = monthFinances.filter(f=>f.type==='expense').reduce((a,b)=>a+b.amount,0);
   const net = income - expense;
 
-  // 6-month cashflow trend
   const trend = useMemo(()=>{
     const months = [];
     const [y,m] = thisMonth.split('-').map(Number);
@@ -27,90 +33,66 @@ const Dashboard = ({ state, setState, goto, openTask, openOrder, ...props }) => 
   }, [finances, thisMonth]);
 
   const pendingOrders = orders.filter(o => ['待處理','進行中','出貨中'].includes(o.status));
-  const stockAlerts = stocks.filter(s => s.qty <= s.min);
   const todayTasks = tasks.filter(t => !t.done);
-  const recentOrders = [...orders].sort((a,b)=>b.created.localeCompare(a.created)).slice(0,5);
 
-  // Compare with last month
   const lastMonthInc = trend[trend.length-2]?.income || 0;
   const incDelta = lastMonthInc ? ((income - lastMonthInc)/lastMonthInc*100) : 0;
 
-  // Top customers (by total)
-  const topCustomers = [...customers].sort((a,b)=>b.total-a.total).slice(0,4);
-
-  // Expense breakdown
-  const expenseCats = useMemo(()=>{
-    const map = {};
-    monthFinances.filter(f=>f.type==='expense').forEach(f=>{
-      map[f.cat] = (map[f.cat]||0) + f.amount;
-    });
-    const palette = ['var(--clay)','var(--terracotta)','var(--ochre)','var(--sage)','var(--ink-soft)','var(--clay-soft)'];
-    return Object.entries(map).sort((a,b)=>b[1]-a[1]).map(([k,v],i)=>({
-      label:k, value:v, color: palette[i%palette.length]
-    }));
-  }, [monthFinances]);
-
   const toggleTask = (id) => {
     setState(s => ({ ...s, tasks: s.tasks.map(t=>t.id===id?{...t, done:!t.done}:t) }));
+  };
+
+  // inline task add
+  const [taskInput, setTaskInput] = useState('');
+  const [taskAdding, setTaskAdding] = useState(false);
+  const addTaskInline = () => {
+    if (!taskInput.trim()) return;
+    setState(s=>({ ...s, tasks:[{ id:uid(), title:taskInput.trim(), due:'今天', priority:'mid', done:false, link:null }, ...s.tasks] }));
+    setTaskInput(''); setTaskAdding(false);
+    toast('待辦已新增');
   };
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
       <div className="topbar">
         <div className="topbar-l">
-          <div className="eyebrow">2026 年 4 月 · 營運總覽</div>
-          <h1 className="h1">晚安，{props.tweaks?.greet_name||'宇澄'}</h1>
+          <div className="eyebrow">{thisMonth.replace('-','年 ')+' 月'} · 營運總覽</div>
+          <h1 className="h1">{getGreeting()}，{props.tweaks?.greet_name||'康老闆'}</h1>
           <div className="sub">這個月已完成 {orders.filter(o=>o.status==='已完成').length} 筆訂單，{pendingOrders.length} 筆仍進行中。</div>
         </div>
         <div className="topbar-r">
-          <button className="btn btn-ghost" onClick={()=>goto('finance')}><Icon name="download" size={14}/> 匯出月報</button>
+          <button className="btn btn-ghost" onClick={()=>goto('finance')}><Icon name="finance" size={14}/> 收支</button>
           <button className="btn btn-primary" onClick={()=>goto('orders', { openNew:true })}><Icon name="plus" size={14}/> 新增訂單</button>
         </div>
       </div>
 
-      {/* ── 本月目標與作法（新增） ── */}
-      <MonthGoalMethod state={state} setState={setState} income={income} orders={orders} customers={customers}/>
+      <MonthGoalMethod state={state} setState={setState} income={income} orders={orders} customers={state.customers}/>
 
-      {/* ── KPI row ── */}
+      {/* KPI */}
       <div className="kpi-row">
         <div className="kpi kpi-income">
-          <div className="kpi-head">
-            <span className="kpi-lab">本月收入</span>
-            <span className="kpi-ic"><Icon name="arrowUp" size={12}/></span>
-          </div>
+          <div className="kpi-head"><span className="kpi-lab">本月收入</span><span className="kpi-ic"><Icon name="arrowUp" size={12}/></span></div>
           <div className="kpi-val mono-val">{fmtMoney(income, true)}</div>
-          <div className={'kpi-foot '+(incDelta>=0?'up':'down')}>
-            <Icon name={incDelta>=0?'arrowUp':'arrowDown'} size={10}/>
-            較上月 {fmtPct(incDelta)}
-          </div>
+          <div className={'kpi-foot '+(incDelta>=0?'up':'down')}><Icon name={incDelta>=0?'arrowUp':'arrowDown'} size={10}/> 較上月 {fmtPct(incDelta)}</div>
         </div>
         <div className="kpi kpi-expense">
-          <div className="kpi-head">
-            <span className="kpi-lab">本月支出</span>
-            <span className="kpi-ic"><Icon name="arrowDown" size={12}/></span>
-          </div>
+          <div className="kpi-head"><span className="kpi-lab">本月支出</span><span className="kpi-ic"><Icon name="arrowDown" size={12}/></span></div>
           <div className="kpi-val mono-val" style={{ color:'var(--terracotta)' }}>{fmtMoney(expense, true)}</div>
           <div className="kpi-foot muted">{monthFinances.filter(f=>f.type==='expense').length} 筆紀錄</div>
         </div>
         <div className="kpi kpi-net">
-          <div className="kpi-head">
-            <span className="kpi-lab">淨利</span>
-            <span className="kpi-ic"><Icon name="finance" size={12}/></span>
-          </div>
+          <div className="kpi-head"><span className="kpi-lab">淨利</span><span className="kpi-ic"><Icon name="finance" size={12}/></span></div>
           <div className="kpi-val mono-val" style={{ color:'var(--clay)' }}>{fmtMoney(net, true)}</div>
           <div className="kpi-foot muted">毛利率 {income?Math.round(net/income*100):0}%</div>
         </div>
         <div className="kpi kpi-orders">
-          <div className="kpi-head">
-            <span className="kpi-lab">進行中訂單</span>
-            <span className="kpi-ic"><Icon name="orders" size={12}/></span>
-          </div>
-          <div className="kpi-val" style={{ fontFamily:'var(--f-serif)' }}>{pendingOrders.length}<span className="kpi-unit">筆</span></div>
-          <div className="kpi-foot muted">待收帳款 {fmtMoney(pendingOrders.reduce((a,b)=>a+b.amount,0), true)}</div>
+          <div className="kpi-head"><span className="kpi-lab">進行中訂單</span><span className="kpi-ic"><Icon name="orders" size={12}/></span></div>
+          <div className="kpi-val">{pendingOrders.length}<span className="kpi-unit">筆</span></div>
+          <div className="kpi-foot muted">待收 {fmtMoney(pendingOrders.reduce((a,b)=>a+b.amount,0), true)}</div>
         </div>
       </div>
 
-      {/* ── Two-column: Cashflow + Goals ── */}
+      {/* 現金流 + 月度目標 */}
       <div className="grid-2-1">
         <div className="card">
           <div className="card-head">
@@ -118,22 +100,16 @@ const Dashboard = ({ state, setState, goto, openTask, openOrder, ...props }) => 
               <div className="card-title">現金流趨勢</div>
               <div className="card-subtle">近 6 個月 · 收入／支出／淨利</div>
             </div>
-            <div style={{ display:'flex', gap:14, fontSize:11, color:'var(--ink-mute)' }}>
-              <span style={{ display:'inline-flex',alignItems:'center',gap:5 }}><span style={{ width:10,height:2,background:'var(--clay)' }}/>收入</span>
-              <span style={{ display:'inline-flex',alignItems:'center',gap:5 }}><span style={{ width:10,height:2,background:'var(--terracotta)' }}/>支出</span>
-              <span style={{ display:'inline-flex',alignItems:'center',gap:5 }}><span style={{ width:10,height:2,background:'var(--sage)' }}/>淨利</span>
+            <div style={{ display:'flex', gap:14, fontSize:12, color:'var(--ink-mute)' }}>
+              <span style={{ display:'inline-flex',alignItems:'center',gap:5 }}><span style={{ width:10,height:2,background:'var(--clay)',display:'inline-block' }}/>收入</span>
+              <span style={{ display:'inline-flex',alignItems:'center',gap:5 }}><span style={{ width:10,height:2,background:'var(--terracotta)',display:'inline-block' }}/>支出</span>
+              <span style={{ display:'inline-flex',alignItems:'center',gap:5 }}><span style={{ width:10,height:2,background:'var(--sage)',display:'inline-block' }}/>淨利</span>
             </div>
           </div>
           <DualLine data={trend}/>
         </div>
-
         <div className="card">
-          <div className="card-head">
-            <div>
-              <div className="card-title">月度目標</div>
-              <div className="card-subtle">4 月達成率</div>
-            </div>
-          </div>
+          <div className="card-head"><div className="card-title">月度目標</div><div className="card-subtle">{thisMonth.replace('-','年')+' 月達成率'}</div></div>
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
             <GoalRow label="月營收目標" value={income} max={goals.revenue.target} color="var(--clay)" fmt={(v)=>fmtMoney(v,true)}/>
             <GoalRow label="訂單數" value={goals.orders.actual} max={goals.orders.target} color="var(--sage)" fmt={v=>v+' 筆'}/>
@@ -143,136 +119,45 @@ const Dashboard = ({ state, setState, goto, openTask, openOrder, ...props }) => 
         </div>
       </div>
 
-      {/* ── Today's tasks + Stock alerts ── */}
-      <div className="grid-1-1">
-        <div className="card">
-          <div className="card-head">
-            <div>
-              <div className="card-title">今日待辦</div>
-              <div className="card-subtle">{todayTasks.length} 項未完成</div>
-            </div>
-            <button className="btn btn-ghost btn-sm" onClick={()=>openTask()}><Icon name="plus" size={12}/> 新增</button>
-          </div>
-          <div style={{ display:'flex', flexDirection:'column' }}>
-            {tasks.slice(0,6).map(t=>(
-              <div key={t.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'1px solid var(--rule-soft)' }}>
-                <button onClick={()=>toggleTask(t.id)} style={{
-                  width:18, height:18, borderRadius:4, border:'1.5px solid '+(t.done?'var(--moss)':'var(--ink-faint)'),
-                  background: t.done?'var(--moss)':'transparent', display:'flex',alignItems:'center',justifyContent:'center',
-                  cursor:'pointer', color:'var(--paper-soft)', flexShrink:0
-                }}>
-                  {t.done && <Icon name="check" size={11}/>}
-                </button>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div className="task-title" style={{ color: t.done?'var(--ink-faint)':'var(--ink)', textDecoration: t.done?'line-through':'none' }}>{t.title}</div>
-                  <div className="task-meta" style={{ display:'flex', gap:8 }}>
-                    <span>{t.due}</span>
-                    {t.priority==='high' && <Pill tone="terracotta">重要</Pill>}
-                    {t.priority==='mid' && <Pill tone="ochre">一般</Pill>}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-head">
-            <div>
-              <div className="card-title">庫存警示</div>
-              <div className="card-subtle">{stockAlerts.length} 項低於安全底線</div>
-            </div>
-            <button className="btn btn-ghost btn-sm" onClick={()=>goto('inventory')}>管理 <Icon name="chevron" size={11}/></button>
-          </div>
-          {stockAlerts.length === 0 ? (
-            <EmptyState icon="check" title="庫存充足" hint="所有品項都在安全存量之上"/>
-          ) : (
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {stockAlerts.slice(0,5).map(s=>(
-                <div key={s.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 12px', background:'var(--paper-deep)', borderRadius:8 }}>
-                  <div style={{ width:36, height:36, borderRadius:7, background:'var(--terracotta-tint)', color:'var(--terracotta)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    <Icon name="alert" size={16}/>
-                  </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div className="alert-name">{s.name}</div>
-                    <div className="alert-meta">{s.cat} · 底線 {s.min} {s.unit}</div>
-                  </div>
-                  <div style={{ textAlign:'right' }}>
-                    <div className="mono alert-qty" style={{ color:'var(--terracotta)' }}>{s.qty}</div>
-                    <div className="alert-unit">{s.unit}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Recent orders + Expenses breakdown ── */}
-      <div className="grid-2-1">
-        <div className="card">
-          <div className="card-head">
-            <div>
-              <div className="card-title">近期訂單</div>
-              <div className="card-subtle">最新 5 筆</div>
-            </div>
-            <button className="btn btn-ghost btn-sm" onClick={()=>goto('orders')}>查看全部 <Icon name="chevron" size={11}/></button>
-          </div>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>訂單</th><th>客戶</th><th>狀態</th>
-                <th style={{ textAlign:'right' }}>金額</th>
-                <th style={{ textAlign:'right' }}>交期</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentOrders.map(o=>(
-                <tr key={o.id} className="clickable" onClick={()=>openOrder(o.id)}>
-                  <td>
-                    <div className="mono" style={{ fontSize:12, color:'var(--ink-mute)' }}>{o.no}</div>
-                    <div style={{ fontSize:14, marginTop:2, color:'var(--ink-soft)' }}>{o.product.length>20?o.product.slice(0,20)+'…':o.product}</div>
-                  </td>
-                  <td style={{ fontWeight:600 }}>{o.client}</td>
-                  <td><Pill tone={STATUS_COLOR[o.status]}>{o.status}</Pill></td>
-                  <td className="num" style={{ fontWeight:600 }}>{fmtMoney(o.amount)}</td>
-                  <td className="num" style={{ color:'var(--ink-mute)' }}>{fmtDate(o.date)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="card">
-          <div className="card-head">
-            <div>
-              <div className="card-title">本月支出分佈</div>
-              <div className="card-subtle">共 {fmtMoney(expense, true)}</div>
-            </div>
-          </div>
-          {expenseCats.length===0 ? <EmptyState icon="finance" title="本月尚無支出紀錄"/> :
-            <BarList items={expenseCats}/>}
-        </div>
-      </div>
-
-      {/* Top customers */}
+      {/* 今日待辦 */}
       <div className="card">
         <div className="card-head">
           <div>
-            <div className="card-title">重要客戶</div>
-            <div className="card-subtle">依累計交易額排序</div>
+            <div className="card-title">今日待辦</div>
+            <div className="card-subtle">{todayTasks.length} 項未完成</div>
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={()=>goto('crm')}>客戶管理 <Icon name="chevron" size={11}/></button>
+          <button className="btn btn-ghost btn-sm" onClick={()=>setTaskAdding(a=>!a)}>
+            <Icon name={taskAdding?'check':'plus'} size={12}/> {taskAdding?'完成':'新增'}
+          </button>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))', gap:12 }}>
-          {topCustomers.map(c=>(
-            <div key={c.id} style={{ padding:'14px 16px', background:'var(--paper-deep)', borderRadius:8, display:'flex', flexDirection:'column', gap:6 }}>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                <span className="customer-card-name">{c.name}</span>
-                <Pill tone={c.tier==='A'?'clay':c.tier==='B'?'sage':'outline'}>{c.tier} 級</Pill>
+
+        {taskAdding && (
+          <div style={{ display:'flex', gap:6, marginBottom:12 }}>
+            <input className="input" autoFocus placeholder="輸入待辦事項，按 Enter 新增"
+              value={taskInput} onChange={e=>setTaskInput(e.target.value)}
+              onKeyDown={e=>{ if(e.key==='Enter') addTaskInline(); if(e.key==='Escape'){ setTaskAdding(false); setTaskInput(''); } }}/>
+            <button className="btn btn-primary btn-sm" onClick={addTaskInline}>加入</button>
+          </div>
+        )}
+
+        <div style={{ display:'flex', flexDirection:'column' }}>
+          {tasks.slice(0,8).map(t=>(
+            <div key={t.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'1px solid var(--rule-soft)' }}>
+              <button onClick={()=>toggleTask(t.id)} style={{
+                width:20, height:20, borderRadius:5, border:'1.5px solid '+(t.done?'var(--moss)':'var(--ink-faint)'),
+                background: t.done?'var(--moss)':'transparent', display:'flex',alignItems:'center',justifyContent:'center',
+                cursor:'pointer', color:'var(--paper-soft)', flexShrink:0
+              }}>
+                {t.done && <Icon name="check" size={12}/>}
+              </button>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div className="task-title" style={{ color: t.done?'var(--ink-faint)':'var(--ink)', textDecoration: t.done?'line-through':'none' }}>{t.title}</div>
+                <div className="task-meta" style={{ display:'flex', gap:8 }}>
+                  <span>{t.due}</span>
+                  {t.priority==='high' && <Pill tone="terracotta">重要</Pill>}
+                  {t.priority==='mid' && <Pill tone="ochre">一般</Pill>}
+                </div>
               </div>
-              <div className="mono customer-card-total">{fmtMoney(c.total, true)}</div>
-              <div className="customer-card-meta">{c.orders} 筆訂單 · 最近 {fmtDateFull(c.last)}</div>
             </div>
           ))}
         </div>
@@ -280,11 +165,8 @@ const Dashboard = ({ state, setState, goto, openTask, openOrder, ...props }) => 
 
       <style>{`
         .grid-2-1 { display: grid; grid-template-columns: 1.7fr 1fr; gap: 14px; }
-        .grid-1-1 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
         @media (max-width: 900px) {
-          .grid-2-1, .grid-1-1 { grid-template-columns: 1fr; }
-          .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
-          .kpi-grid .stat:nth-child(-n+2) { border-bottom: 1px solid var(--rule-soft); }
+          .grid-2-1 { grid-template-columns: 1fr; }
         }
       `}</style>
     </div>
@@ -395,7 +277,10 @@ const MonthGoalMethod = ({ state, setState, income, orders, customers }) => {
       <div style={{ padding:'18px 20px', borderBottom:'1px solid var(--rule-soft)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
         <div>
           <div className="eyebrow" style={{ marginBottom:4 }}>{goals.month.replace('-','年 ')+' 月'} · 本月目標</div>
-          <div style={{ fontSize:22, fontWeight:700, lineHeight:1.2 }}>月營收 <span style={{ color:'var(--clay)' }}>{fmtMoney(goals.revenue.target, true)}</span> <span style={{ fontSize:15, color:'var(--ink-mute)', fontWeight:500 }}>已達 {revPct}%</span></div>
+          <div style={{ fontSize:20, fontWeight:700, lineHeight:1.3, color:'var(--ink)' }}>
+            月營收目標 <span style={{ color:'var(--clay)' }}>{fmtMoney(goals.revenue.target, true)}</span>
+            <span style={{ color:'var(--sage)', marginLeft:10, fontWeight:700 }}>已達 {revPct}%</span>
+          </div>
           <div style={{ fontSize:13, color:'var(--ink-mute)', marginTop:6 }}>訂單 {goals.orders.actual}/{goals.orders.target} · 新客 {goals.newClients.actual}/{goals.newClients.target} · 毛利率 {goals.margin.actual}%</div>
         </div>
         <div style={{ textAlign:'right' }}>

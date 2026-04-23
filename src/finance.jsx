@@ -124,6 +124,24 @@ const FinanceView = ({ state, setState }) => {
         {list.length===0 && <EmptyState icon="finance" title="尚無紀錄"/>}
       </div>
 
+      {/* 支出分佈 */}
+      {mode==='month' && (()=>{
+        const map = {};
+        listRaw.filter(x=>x.type==='expense').forEach(f=>{ map[f.cat]=(map[f.cat]||0)+f.amount; });
+        const palette=['var(--clay)','var(--terracotta)','var(--ochre)','var(--sage)','var(--ink-soft)'];
+        const cats=Object.entries(map).sort((a,b)=>b[1]-a[1]).map(([k,v],i)=>({label:k,value:v,color:palette[i%palette.length]}));
+        if (!cats.length) return null;
+        return (
+          <div className="card">
+            <div className="card-head">
+              <div className="card-title">本月支出分佈</div>
+              <div className="card-subtle">共 {fmtMoney(expense, true)}</div>
+            </div>
+            <BarList items={cats}/>
+          </div>
+        );
+      })()}
+
       <Modal open={modalOpen} onClose={()=>setModalOpen(false)} title={editingId?'編輯紀錄':'新增收支紀錄'}
         footer={<>
           {editingId && <button className="btn btn-danger" onClick={del}><Icon name="trash" size={13}/> 刪除</button>}

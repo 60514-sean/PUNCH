@@ -76,16 +76,16 @@ const ProductsView = ({ state, setState }) => {
                 <div key={p.id} className="card flat" style={{ border:'1px solid var(--rule-soft)', padding:14, cursor:'pointer' }} onClick={()=>openEdit(p)}>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
                     <div>
-                      <div style={{ fontFamily:'var(--f-serif)', fontSize:16, fontWeight:600 }}>{p.name}</div>
-                      <div style={{ fontSize:11, color:'var(--ink-mute)' }}>{p.cat} · {p.spec}</div>
+                      <div style={{ fontSize:15, fontWeight:700 }}>{p.name}</div>
+                      <div style={{ fontSize:13, color:'var(--ink-mute)' }}>{p.cat} · {p.spec}</div>
                     </div>
                     <div className="mono" style={{ fontSize:17, fontWeight:700, color:'var(--clay)' }}>{fmtMoney(p.price)}</div>
                   </div>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, padding:'10px 0 8px', borderTop:'1px dashed var(--rule-soft)' }}>
-                    <div><div className="eyebrow" style={{ fontSize:9 }}>總成本</div><div className="mono" style={{ fontSize:13, fontWeight:600 }}>{fmtMoney(tc)}</div></div>
-                    <div style={{ textAlign:'right' }}><div className="eyebrow" style={{ fontSize:9 }}>淨利</div><div className="mono" style={{ fontSize:13, fontWeight:600, color:net>=20?'var(--moss)':'var(--terracotta)' }}>{fmtMoney(p.price-tc)}</div></div>
+                    <div><div className="eyebrow">總成本</div><div className="mono" style={{ fontSize:14, fontWeight:700 }}>{fmtMoney(tc)}</div></div>
+                    <div style={{ textAlign:'right' }}><div className="eyebrow">淨利</div><div className="mono" style={{ fontSize:14, fontWeight:700, color:net>=20?'var(--moss)':'var(--terracotta)' }}>{fmtMoney(p.price-tc)}</div></div>
                   </div>
-                  <div style={{ display:'flex', gap:12, fontSize:11 }}>
+                  <div style={{ display:'flex', gap:12, fontSize:13 }}>
                     <span><span className="muted">毛利 </span><strong className="mono" style={{ color:'var(--sage)' }}>{gross}%</strong></span>
                     <span><span className="muted">淨利 </span><strong className="mono" style={{ color:'var(--clay)' }}>{net}%</strong></span>
                     {p.minPrice>0 && <span style={{ marginLeft:'auto' }} className="muted">底價 {fmtMoney(p.minPrice)}</span>}
@@ -110,18 +110,18 @@ const ProductsView = ({ state, setState }) => {
               <div className="field"><label>目標淨利率 %</label><input className="input mono" type="number" value={calc.net} onChange={e=>setCalc({...calc,net:e.target.value})}/></div>
             </div>
 
-            <div style={{ background:'var(--clay-tint)', borderRadius:8, padding:12 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:'1px solid var(--paper-deep)' }}>
-                <span style={{ fontSize:12, color:'var(--ink-soft)' }}>總成本</span>
-                <span className="mono" style={{ fontWeight:700 }}>{fmtMoney(total)}</span>
+            <div style={{ background:'var(--clay-tint)', borderRadius:8, padding:14 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid var(--paper-deep)' }}>
+                <span style={{ fontSize:14, color:'var(--ink-soft)' }}>總成本</span>
+                <span className="mono" style={{ fontWeight:700, fontSize:15 }}>{fmtMoney(total)}</span>
               </div>
-              <div style={{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:'1px solid var(--paper-deep)' }}>
-                <span style={{ fontSize:12, color:'var(--ink-soft)' }}>毛利建議售價</span>
-                <span className="mono" style={{ fontWeight:700, color:'var(--moss)' }}>{fmtMoney(grossPrice)}</span>
+              <div style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid var(--paper-deep)' }}>
+                <span style={{ fontSize:14, color:'var(--ink-soft)' }}>毛利建議售價</span>
+                <span className="mono" style={{ fontWeight:700, fontSize:15, color:'var(--moss)' }}>{fmtMoney(grossPrice)}</span>
               </div>
-              <div style={{ display:'flex', justifyContent:'space-between', padding:'6px 0' }}>
-                <span style={{ fontSize:12, color:'var(--ink-soft)' }}>淨利建議售價</span>
-                <span className="mono" style={{ fontWeight:700, color:'var(--clay)' }}>{fmtMoney(netPrice)}</span>
+              <div style={{ display:'flex', justifyContent:'space-between', padding:'8px 0' }}>
+                <span style={{ fontSize:14, color:'var(--ink-soft)' }}>淨利建議售價</span>
+                <span className="mono" style={{ fontWeight:700, fontSize:15, color:'var(--clay)' }}>{fmtMoney(netPrice)}</span>
               </div>
             </div>
 
@@ -132,7 +132,7 @@ const ProductsView = ({ state, setState }) => {
               <input className="input mono" type="number" value={calc.custom} onChange={e=>setCalc({...calc,custom:e.target.value})} placeholder="輸入檢查利潤"/>
             </div>
             {cp>0 && (
-              <div style={{ padding:'10px 12px', background:'var(--paper-deep)', borderRadius:8, display:'flex', justifyContent:'space-between', fontSize:12 }}>
+              <div style={{ padding:'12px 14px', background:'var(--paper-deep)', borderRadius:8, display:'flex', justifyContent:'space-between', fontSize:14 }}>
                 <span><span className="muted">毛利率 </span><strong className="mono">{cGross}%</strong></span>
                 <span><span className="muted">淨利率 </span><strong className="mono" style={{ color: cNet>=20?'var(--moss)':cNet>=10?'var(--ochre)':'var(--terracotta)' }}>{cNet}%</strong></span>
                 <span><span className="muted">淨利 </span><strong className="mono">{fmtMoney(cp-total)}</strong></span>

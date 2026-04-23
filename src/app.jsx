@@ -12,7 +12,7 @@ const NAV = [
     { key:'orders', label:'訂單追蹤', icon:'orders' },
     { key:'quote', label:'報價單', icon:'quote' },
     { key:'crm', label:'客戶管理', icon:'crm' },
-    { key:'channels', label:'通路控管', icon:'channel' },
+    { key:'channels', label:'通路管理', icon:'channel' },
   ]},
   { group:'資源', items:[
     { key:'finance', label:'收支控管', icon:'finance' },
@@ -65,7 +65,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "accent": "clay",
   "density": "comfortable",
   "serif": "Noto Serif TC",
-  "greet_name": "宇澄"
+  "greet_name": "康老闆"
 }/*EDITMODE-END*/;
 
 function mergeWithSeed(parsed) {
