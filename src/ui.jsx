@@ -239,9 +239,11 @@ const PhotoUpload = ({ value, onChange, size = 120 }) => {
 };
 
 // 列表縮圖
-const PhotoThumb = ({ url, size = 40, alt = '' }) => (
-  <div style={{ width:size, height:size, borderRadius:6, overflow:'hidden', background:'var(--paper-deep)', flexShrink:0,
-                display:'flex', alignItems:'center', justifyContent:'center', color:'var(--ink-faint)' }}>
+const PhotoThumb = ({ url, size = 40, alt = '', onClick }) => (
+  <div onClick={onClick}
+       style={{ width:size, height:size, borderRadius:6, overflow:'hidden', background:'var(--paper-deep)', flexShrink:0,
+                display:'flex', alignItems:'center', justifyContent:'center', color:'var(--ink-faint)',
+                cursor: onClick && url ? 'zoom-in' : undefined }}>
     {url
       ? <img src={cldThumb(url, size*2)} alt={alt} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} loading="lazy"/>
       : <Icon name="image" size={Math.min(20, Math.round(size*0.5))}/>
@@ -249,4 +251,25 @@ const PhotoThumb = ({ url, size = 40, alt = '' }) => (
   </div>
 );
 
-Object.assign(window, { Modal, Sparkline, BarList, Ring, Pill, EmptyState, Segmented, PhotoUpload, PhotoThumb, uploadToCloudinary, cldThumb });
+// 全螢幕大圖預覽（點黑底任處或右上 × 關閉）
+const PhotoLightbox = ({ url, onClose }) => {
+  if (!url) return null;
+  return (
+    <div onClick={onClose} role="dialog" aria-label="放大檢視照片"
+         style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.88)', zIndex:300,
+                  display:'flex', alignItems:'center', justifyContent:'center', cursor:'zoom-out',
+                  padding:20 }}>
+      <img src={cldThumb(url, 1600)} alt=""
+           style={{ maxWidth:'94vw', maxHeight:'94vh', objectFit:'contain', borderRadius:6,
+                    boxShadow:'0 20px 60px rgba(0,0,0,0.5)' }}
+           onClick={(e)=>e.stopPropagation()}/>
+      <button type="button" onClick={onClose} aria-label="關閉"
+              style={{ position:'absolute', top:20, right:20, width:40, height:40,
+                       background:'rgba(255,255,255,0.18)', border:'none', borderRadius:'50%',
+                       color:'#fff', cursor:'pointer', fontSize:22, lineHeight:1,
+                       display:'flex', alignItems:'center', justifyContent:'center' }}>×</button>
+    </div>
+  );
+};
+
+Object.assign(window, { Modal, Sparkline, BarList, Ring, Pill, EmptyState, Segmented, PhotoUpload, PhotoThumb, PhotoLightbox, uploadToCloudinary, cldThumb });

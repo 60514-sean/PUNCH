@@ -250,6 +250,8 @@ const InventoryView = ({ state, setState }) => {
   const [form, setForm] = useStateF({ id:'', kind:'material', name:'', cat:'', unit:'', qty:'', min:'', price:'', photo:'', note:'', loc:'' });
   const [adj, setAdj] = useStateF({ id:'', name:'', current:0, type:'add', qty:'', note:'' });
   const [noteView, setNoteView] = useStateF(null); // 點圖示要看的品項
+  const [viewMode, setViewMode] = useStateF('list'); // list | grid
+  const [photoView, setPhotoView] = useStateF(''); // 點縮圖放大要看的 URL
 
   const openNew = () => {
     setForm({ id:'', kind: tab==='goods'?'goods':'material', name:'', cat:'', unit:'', qty:'', min:'', price:'', photo:'', note:'', loc:'' });
@@ -325,6 +327,7 @@ const InventoryView = ({ state, setState }) => {
             <input className="input has-leading-icon" placeholder="搜尋…" value={q} onChange={e=>setQ(e.target.value)}
               style={{ padding:'6px 11px 6px 30px', fontSize:13, borderRadius:7 }}/>
           </div>
+          <Segmented options={[{value:'list',label:'列表'},{value:'grid',label:'網格'}]} value={viewMode} onChange={setViewMode}/>
         </div>
       )}
 
@@ -375,6 +378,7 @@ const InventoryView = ({ state, setState }) => {
         </div>
       ) : (
         <div className="card">
+          {viewMode === 'list' && <>
           <table className="tbl desk-only">
             <thead><tr>
               <th>品項</th>
@@ -390,7 +394,7 @@ const InventoryView = ({ state, setState }) => {
                   <tr key={s.id}>
                     <td>
                       <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                        <PhotoThumb url={s.photo} size={64} alt={s.name}/>
+                        <PhotoThumb url={s.photo} size={64} alt={s.name} onClick={()=>s.photo && setPhotoView(s.photo)}/>
                         <div style={{ minWidth:0 }}>
                           <div style={{ fontWeight:600, display:'flex', alignItems:'center', gap:6 }}>
                             {s.name}
@@ -426,7 +430,6 @@ const InventoryView = ({ state, setState }) => {
               })}
             </tbody>
           </table>
-          {items.length===0 && <EmptyState icon="inventory" title="尚無庫存品項"/>}
           {/* Mobile card view */}
           <div className="mob-cards">
             {items.map(s=>{
@@ -434,7 +437,7 @@ const InventoryView = ({ state, setState }) => {
               return (
                 <div key={s.id} className="mob-card" style={{ cursor:'default' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                    <PhotoThumb url={s.photo} size={88} alt={s.name}/>
+                    <PhotoThumb url={s.photo} size={88} alt={s.name} onClick={()=>s.photo && setPhotoView(s.photo)}/>
                     <div style={{ minWidth:0, flex:1 }}>
                       <div style={{ fontSize:14, fontWeight:700, display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
                         {s.name}
@@ -462,6 +465,42 @@ const InventoryView = ({ state, setState }) => {
               );
             })}
           </div>
+          </>}
+          {viewMode === 'grid' && (
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(170px, 1fr))', gap:12 }}>
+              {items.map(s => {
+                const low = s.qty <= s.min;
+                return (
+                  <div key={s.id} style={{ border:'1px solid var(--rule-soft)', borderRadius:10, padding:10, cursor:'pointer', background:'var(--paper-soft)', display:'flex', flexDirection:'column', gap:8 }}
+                       onClick={()=>openEdit(s)}>
+                    <div style={{ position:'relative', aspectRatio:'1/1', borderRadius:7, overflow:'hidden', background:'var(--paper-deep)', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--ink-faint)' }}
+                         onClick={(e)=>{ if (s.photo){ e.stopPropagation(); setPhotoView(s.photo); } }}>
+                      {s.photo
+                        ? <img src={cldThumb(s.photo, 400)} alt={s.name}
+                               style={{ width:'100%', height:'100%', objectFit:'cover', display:'block', cursor:'zoom-in' }} loading="lazy"/>
+                        : <Icon name="image" size={28}/>
+                      }
+                      {low && <div style={{ position:'absolute', top:6, left:6 }}><Pill tone="terracotta" dot>低於底線</Pill></div>}
+                      {s.note && <button type="button" title="檢視備註" onClick={(e)=>{e.stopPropagation();setNoteView(s);}}
+                        style={{ position:'absolute', top:6, right:6, width:28, height:28, padding:0,
+                                 display:'inline-flex', alignItems:'center', justifyContent:'center',
+                                 border:'none', background:'rgba(255,255,255,0.88)', cursor:'pointer',
+                                 color:'var(--ink-soft)', borderRadius:'50%' }}><Icon name="note" size={13}/></button>}
+                    </div>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.name}</div>
+                      <div style={{ display:'flex', alignItems:'baseline', gap:4, marginTop:2 }}>
+                        <span className="mono" style={{ fontSize:17, fontWeight:700, color: low?'var(--terracotta)':'var(--ink)' }}>{s.qty}</span>
+                        <span style={{ fontSize:11, color:'var(--ink-mute)' }}>/ {s.min} {s.unit}</span>
+                      </div>
+                      {s.loc && <div style={{ fontSize:10, color:'var(--ink-mute)', marginTop:3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>位置 {s.loc}</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {items.length===0 && <EmptyState icon="inventory" title="尚無庫存品項"/>}
         </div>
       )}
 
@@ -536,6 +575,8 @@ const InventoryView = ({ state, setState }) => {
           {noteView?.note}
         </div>
       </Modal>
+
+      <PhotoLightbox url={photoView} onClose={()=>setPhotoView('')}/>
     </div>
   );
 };
