@@ -395,8 +395,6 @@ const InventoryView = ({ state, setState }) => {
                           <div style={{ fontWeight:600, display:'flex', alignItems:'center', gap:6 }}>
                             {s.name}
                             {low && <Pill tone="terracotta" dot>低於底線</Pill>}
-                            {s.note && <button type="button" title="檢視備註" onClick={(e)=>{e.stopPropagation();setNoteView(s);}}
-  style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', padding:2, border:'none', background:'none', cursor:'pointer', color:'var(--ink-mute)', borderRadius:4 }}><Icon name="note" size={14}/></button>}
                           </div>
                           <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>{s.cat} · 更新 {fmtDateFull(s.updated)}</div>
                         </div>
@@ -408,9 +406,17 @@ const InventoryView = ({ state, setState }) => {
                     </td>
                     <td className="num">{fmtMoney(s.price)}</td>
                     <td className="num" style={{ fontWeight:700 }}>{fmtMoney(s.qty*s.price)}</td>
-                    <td style={{ textAlign:'right' }}>
-                      <button className="btn btn-ghost btn-sm" onClick={()=>openAdj(s)}>進出貨</button>
-                      <button className="btn btn-ghost btn-sm" style={{ marginLeft:4 }} onClick={()=>openEdit(s)}><Icon name="edit" size={12}/></button>
+                    <td>
+                      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+                        <div style={{ width:22, display:'flex', alignItems:'center' }}>
+                          {s.note && <button type="button" title="檢視備註" onClick={(e)=>{e.stopPropagation();setNoteView(s);}}
+                            style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', padding:2, border:'none', background:'none', cursor:'pointer', color:'var(--ink-mute)', borderRadius:4 }}><Icon name="note" size={14}/></button>}
+                        </div>
+                        <div style={{ display:'flex', gap:4 }}>
+                          <button className="btn btn-ghost btn-sm" onClick={()=>openAdj(s)}>進出貨</button>
+                          <button className="btn btn-ghost btn-sm" onClick={()=>openEdit(s)}><Icon name="edit" size={12}/></button>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -430,8 +436,6 @@ const InventoryView = ({ state, setState }) => {
                       <div style={{ fontSize:14, fontWeight:700, display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
                         {s.name}
                         {low && <Pill tone="terracotta" dot>低於底線</Pill>}
-                        {s.note && <button type="button" title="檢視備註" onClick={(e)=>{e.stopPropagation();setNoteView(s);}}
-  style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', padding:2, border:'none', background:'none', cursor:'pointer', color:'var(--ink-mute)', borderRadius:4 }}><Icon name="note" size={14}/></button>}
                       </div>
                       <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>{s.cat} · 更新 {fmtDateFull(s.updated)}</div>
                       <div className="mono" style={{ marginTop:6, display:'flex', alignItems:'baseline', gap:6 }}>
@@ -443,7 +447,10 @@ const InventoryView = ({ state, setState }) => {
                       </div>
                     </div>
                   </div>
-                  <div style={{ display:'flex', gap:4, marginTop:10, paddingTop:8, borderTop:'1px dashed var(--rule-soft)', justifyContent:'flex-end' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:10, paddingTop:8, borderTop:'1px dashed var(--rule-soft)' }}>
+                    {s.note && <button type="button" title="檢視備註" onClick={(e)=>{e.stopPropagation();setNoteView(s);}}
+                      style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', padding:6, border:'none', background:'none', cursor:'pointer', color:'var(--ink-mute)', borderRadius:4 }}><Icon name="note" size={15}/></button>}
+                    <div style={{ flex:1 }}/>
                     <button className="btn btn-ghost btn-sm" onClick={(e)=>{e.stopPropagation();openAdj(s);}}>進出貨</button>
                     <button className="btn btn-ghost btn-sm" onClick={(e)=>{e.stopPropagation();openEdit(s);}}><Icon name="edit" size={11}/></button>
                   </div>
