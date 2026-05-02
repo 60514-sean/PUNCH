@@ -247,11 +247,12 @@ const InventoryView = ({ state, setState }) => {
   const [modalOpen, setModalOpen] = useStateF(false);
   const [adjOpen, setAdjOpen] = useStateF(false);
   const [editingId, setEditingId] = useStateF(null);
-  const [form, setForm] = useStateF({ id:'', kind:'material', name:'', cat:'', unit:'', qty:'', min:'', price:'', photo:'' });
+  const [form, setForm] = useStateF({ id:'', kind:'material', name:'', cat:'', unit:'', qty:'', min:'', price:'', photo:'', note:'' });
   const [adj, setAdj] = useStateF({ id:'', name:'', current:0, type:'add', qty:'', note:'' });
+  const [noteView, setNoteView] = useStateF(null); // 點圖示要看的品項
 
   const openNew = () => {
-    setForm({ id:'', kind: tab==='goods'?'goods':'material', name:'', cat:'', unit:'', qty:'', min:'', price:'', photo:'' });
+    setForm({ id:'', kind: tab==='goods'?'goods':'material', name:'', cat:'', unit:'', qty:'', min:'', price:'', photo:'', note:'' });
     setEditingId(null); setModalOpen(true);
   };
   const openEdit = (s) => { setForm({...s}); setEditingId(s.id); setModalOpen(true); };
@@ -376,7 +377,7 @@ const InventoryView = ({ state, setState }) => {
         <div className="card">
           <table className="tbl desk-only">
             <thead><tr>
-              <th>品項</th><th>分類</th>
+              <th>品項</th>
               <th style={{textAlign:'right'}}>庫存 / 底線</th>
               <th style={{textAlign:'right'}}>單價</th>
               <th style={{textAlign:'right'}}>小計</th>
@@ -385,27 +386,25 @@ const InventoryView = ({ state, setState }) => {
             <tbody>
               {items.map(s=>{
                 const low = s.qty<=s.min;
-                const ratio = s.min ? Math.min(1.5, s.qty/s.min) : 1;
                 return (
                   <tr key={s.id}>
                     <td>
-                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                        <PhotoThumb url={s.photo} size={40} alt={s.name}/>
+                      <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                        <PhotoThumb url={s.photo} size={64} alt={s.name}/>
                         <div style={{ minWidth:0 }}>
                           <div style={{ fontWeight:600, display:'flex', alignItems:'center', gap:6 }}>
                             {s.name}
                             {low && <Pill tone="terracotta" dot>低於底線</Pill>}
+                            {s.note && <button type="button" title="檢視備註" onClick={(e)=>{e.stopPropagation();setNoteView(s);}}
+  style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', padding:2, border:'none', background:'none', cursor:'pointer', color:'var(--ink-mute)', borderRadius:4 }}><Icon name="note" size={14}/></button>}
                           </div>
-                          <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>更新：{fmtDateFull(s.updated)}</div>
+                          <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>{s.cat} · 更新 {fmtDateFull(s.updated)}</div>
                         </div>
                       </div>
                     </td>
-                    <td style={{ fontSize:12, color:'var(--ink-soft)' }}>{s.cat}</td>
-                    <td className="num" style={{ minWidth:140 }}>
-                      <div style={{ fontSize:15, fontWeight:700, color: low?'var(--terracotta)':'var(--ink)' }}>{s.qty} <span style={{ fontSize:11, color:'var(--ink-mute)', fontWeight:500 }}>/ {s.min} {s.unit}</span></div>
-                      <div className="bar" style={{ marginTop:4 }}>
-                        <div className="bar-fill" style={{ width: Math.min(100, ratio*66)+'%', background: low?'var(--terracotta)':'var(--sage)' }}/>
-                      </div>
+                    <td className="num" style={{ minWidth:120 }}>
+                      <span style={{ fontSize:18, fontWeight:700, color: low?'var(--terracotta)':'var(--ink)' }}>{s.qty}</span>
+                      <span style={{ fontSize:12, color:'var(--ink-mute)', fontWeight:500, marginLeft:4 }}>/ {s.min} {s.unit}</span>
                     </td>
                     <td className="num">{fmtMoney(s.price)}</td>
                     <td className="num" style={{ fontWeight:700 }}>{fmtMoney(s.qty*s.price)}</td>
@@ -423,34 +422,30 @@ const InventoryView = ({ state, setState }) => {
           <div className="mob-cards">
             {items.map(s=>{
               const low = s.qty<=s.min;
-              const ratio = s.min ? Math.min(1.5, s.qty/s.min) : 1;
               return (
                 <div key={s.id} className="mob-card" style={{ cursor:'default' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10, marginBottom:8 }}>
-                    <PhotoThumb url={s.photo} size={56} alt={s.name}/>
+                  <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                    <PhotoThumb url={s.photo} size={88} alt={s.name}/>
                     <div style={{ minWidth:0, flex:1 }}>
                       <div style={{ fontSize:14, fontWeight:700, display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
                         {s.name}
                         {low && <Pill tone="terracotta" dot>低於底線</Pill>}
+                        {s.note && <button type="button" title="檢視備註" onClick={(e)=>{e.stopPropagation();setNoteView(s);}}
+  style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', padding:2, border:'none', background:'none', cursor:'pointer', color:'var(--ink-mute)', borderRadius:4 }}><Icon name="note" size={14}/></button>}
                       </div>
                       <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>{s.cat} · 更新 {fmtDateFull(s.updated)}</div>
-                    </div>
-                    <div className="mono" style={{ textAlign:'right' }}>
-                      <div style={{ fontSize:17, fontWeight:700, color: low?'var(--terracotta)':'var(--ink)' }}>{s.qty}</div>
-                      <div style={{ fontSize:10, color:'var(--ink-mute)' }}>/ {s.min} {s.unit}</div>
+                      <div className="mono" style={{ marginTop:6, display:'flex', alignItems:'baseline', gap:6 }}>
+                        <span style={{ fontSize:20, fontWeight:700, color: low?'var(--terracotta)':'var(--ink)' }}>{s.qty}</span>
+                        <span style={{ fontSize:11, color:'var(--ink-mute)' }}>/ {s.min} {s.unit}</span>
+                        <span style={{ flex:1 }}/>
+                        <span style={{ fontSize:12, color:'var(--ink-mute)' }}>小計</span>
+                        <strong className="mono" style={{ fontSize:13 }}>{fmtMoney(s.qty*s.price)}</strong>
+                      </div>
                     </div>
                   </div>
-                  <div className="bar" style={{ marginBottom:10 }}>
-                    <div className="bar-fill" style={{ width: Math.min(100, ratio*66)+'%', background: low?'var(--terracotta)':'var(--sage)' }}/>
-                  </div>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:8, borderTop:'1px dashed var(--rule-soft)' }}>
-                    <div className="mono" style={{ fontSize:12 }}>
-                      <span className="muted">小計 </span><strong>{fmtMoney(s.qty*s.price)}</strong>
-                    </div>
-                    <div style={{ display:'flex', gap:4 }}>
-                      <button className="btn btn-ghost btn-sm" onClick={(e)=>{e.stopPropagation();openAdj(s);}}>進出貨</button>
-                      <button className="btn btn-ghost btn-sm" onClick={(e)=>{e.stopPropagation();openEdit(s);}}><Icon name="edit" size={11}/></button>
-                    </div>
+                  <div style={{ display:'flex', gap:4, marginTop:10, paddingTop:8, borderTop:'1px dashed var(--rule-soft)', justifyContent:'flex-end' }}>
+                    <button className="btn btn-ghost btn-sm" onClick={(e)=>{e.stopPropagation();openAdj(s);}}>進出貨</button>
+                    <button className="btn btn-ghost btn-sm" onClick={(e)=>{e.stopPropagation();openEdit(s);}}><Icon name="edit" size={11}/></button>
                   </div>
                 </div>
               );
@@ -488,6 +483,9 @@ const InventoryView = ({ state, setState }) => {
             <div className="field"><label>安全底線</label><input className="input mono" type="number" value={form.min} onChange={e=>setForm({...form,min:e.target.value})}/></div>
             <div className="field"><label>單價</label><input className="input mono" type="number" value={form.price} onChange={e=>setForm({...form,price:e.target.value})}/></div>
           </div>
+          <div className="field"><label>備註</label>
+            <textarea className="textarea" value={form.note} onChange={e=>setForm({...form,note:e.target.value})} placeholder="規格、廠商、注意事項…"/>
+          </div>
         </div>
       </Modal>
 
@@ -513,6 +511,17 @@ const InventoryView = ({ state, setState }) => {
             <div className="field"><label>數量</label><input className="input mono" type="number" value={adj.qty} onChange={e=>setAdj({...adj,qty:e.target.value})}/></div>
           </div>
           <div className="field"><label>備註</label><input className="input" value={adj.note} onChange={e=>setAdj({...adj,note:e.target.value})} placeholder="進出貨說明"/></div>
+        </div>
+      </Modal>
+
+      {/* View note */}
+      <Modal open={!!noteView} onClose={()=>setNoteView(null)} title={noteView ? noteView.name + ' · 備註' : '備註'}
+        footer={<>
+          <div style={{ flex:1 }}/>
+          <button className="btn btn-ghost" onClick={()=>setNoteView(null)}>關閉</button>
+        </>}>
+        <div style={{ whiteSpace:'pre-wrap', fontSize:14, color:'var(--ink)', lineHeight:1.6, padding:'4px 0' }}>
+          {noteView?.note}
         </div>
       </Modal>
     </div>
