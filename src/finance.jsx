@@ -247,11 +247,11 @@ const InventoryView = ({ state, setState }) => {
   const [modalOpen, setModalOpen] = useStateF(false);
   const [adjOpen, setAdjOpen] = useStateF(false);
   const [editingId, setEditingId] = useStateF(null);
-  const [form, setForm] = useStateF({ id:'', kind:'material', name:'', cat:'', unit:'', qty:'', min:'', price:'' });
+  const [form, setForm] = useStateF({ id:'', kind:'material', name:'', cat:'', unit:'', qty:'', min:'', price:'', photo:'' });
   const [adj, setAdj] = useStateF({ id:'', name:'', current:0, type:'add', qty:'', note:'' });
 
   const openNew = () => {
-    setForm({ id:'', kind: tab==='goods'?'goods':'material', name:'', cat:'', unit:'', qty:'', min:'', price:'' });
+    setForm({ id:'', kind: tab==='goods'?'goods':'material', name:'', cat:'', unit:'', qty:'', min:'', price:'', photo:'' });
     setEditingId(null); setModalOpen(true);
   };
   const openEdit = (s) => { setForm({...s}); setEditingId(s.id); setModalOpen(true); };
@@ -389,11 +389,16 @@ const InventoryView = ({ state, setState }) => {
                 return (
                   <tr key={s.id}>
                     <td>
-                      <div style={{ fontWeight:600, display:'flex', alignItems:'center', gap:6 }}>
-                        {s.name}
-                        {low && <Pill tone="terracotta" dot>低於底線</Pill>}
+                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                        <PhotoThumb url={s.photo} size={40} alt={s.name}/>
+                        <div style={{ minWidth:0 }}>
+                          <div style={{ fontWeight:600, display:'flex', alignItems:'center', gap:6 }}>
+                            {s.name}
+                            {low && <Pill tone="terracotta" dot>低於底線</Pill>}
+                          </div>
+                          <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>更新：{fmtDateFull(s.updated)}</div>
+                        </div>
                       </div>
-                      <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>更新：{fmtDateFull(s.updated)}</div>
                     </td>
                     <td style={{ fontSize:12, color:'var(--ink-soft)' }}>{s.cat}</td>
                     <td className="num" style={{ minWidth:140 }}>
@@ -421,7 +426,8 @@ const InventoryView = ({ state, setState }) => {
               const ratio = s.min ? Math.min(1.5, s.qty/s.min) : 1;
               return (
                 <div key={s.id} className="mob-card" style={{ cursor:'default' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8, marginBottom:8 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10, marginBottom:8 }}>
+                    <PhotoThumb url={s.photo} size={56} alt={s.name}/>
                     <div style={{ minWidth:0, flex:1 }}>
                       <div style={{ fontSize:14, fontWeight:700, display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
                         {s.name}
@@ -462,6 +468,9 @@ const InventoryView = ({ state, setState }) => {
           <button className="btn btn-primary" onClick={save}>儲存</button>
         </>}>
         <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <div className="field"><label>商品照片</label>
+            <PhotoUpload value={form.photo} onChange={(url)=>setForm({...form, photo:url})} size={120}/>
+          </div>
           <div className="field"><label>類型</label>
             <div style={{ display:'flex',gap:6 }}>
               {[{v:'material',l:'材料'},{v:'goods',l:'商品'}].map(t=>(

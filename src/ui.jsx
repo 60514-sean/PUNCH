@@ -143,4 +143,110 @@ const Segmented = ({ options, value, onChange }) => (
   </div>
 );
 
-Object.assign(window, { Modal, Sparkline, BarList, Ring, Pill, EmptyState, Segmented });
+// ─── Cloudinary 圖片上傳 ───
+async function _resizeImage(file, maxPx) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('blob 轉換失敗')), 'image/jpeg', 0.85);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('圖片讀取失敗')); };
+    img.src = url;
+  });
+}
+
+async function uploadToCloudinary(file) {
+  const cfg = window.CLOUDINARY;
+  if (!cfg || !cfg.cloudName || !cfg.uploadPreset) throw new Error('Cloudinary 尚未設定');
+  const blob = await _resizeImage(file, cfg.maxPx || 800);
+  const fd = new FormData();
+  fd.append('file', blob);
+  fd.append('upload_preset', cfg.uploadPreset);
+  if (cfg.folder) fd.append('folder', cfg.folder);
+  const r = await fetch(`https://api.cloudinary.com/v1_1/${cfg.cloudName}/image/upload`, { method:'POST', body:fd });
+  if (!r.ok) {
+    let msg = '上傳失敗 (HTTP ' + r.status + ')';
+    try { const j = await r.json(); if (j.error?.message) msg = j.error.message; } catch {}
+    throw new Error(msg);
+  }
+  const j = await r.json();
+  return j.secure_url;
+}
+
+// Cloudinary URL 即時縮圖（不重新上傳，只改 URL）
+function cldThumb(url, w = 200) {
+  if (!url || !url.includes('/upload/')) return url || '';
+  return url.replace('/upload/', `/upload/w_${w},h_${w},c_fill,f_auto,q_auto/`);
+}
+
+// 正方形上傳區（編輯 modal 用）
+const PhotoUpload = ({ value, onChange, size = 120 }) => {
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState('');
+  const inputRef = React.useRef(null);
+
+  const handlePick = async (e) => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    setBusy(true); setErr('');
+    try {
+      const url = await uploadToCloudinary(f);
+      onChange(url);
+    } catch (ex) {
+      setErr(ex.message || '上傳失敗');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const open = () => { if (!busy) inputRef.current?.click(); };
+
+  return (
+    <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
+      <div className="photo-upload-box" style={{ width:size, height:size }} onClick={open}>
+        {value
+          ? <img src={cldThumb(value, size*2)} alt="" />
+          : <div className="photo-upload-placeholder">
+              <Icon name="image" size={26}/>
+              <div style={{ fontSize:11, marginTop:6, color:'var(--ink-mute)' }}>點擊上傳</div>
+            </div>
+        }
+        {busy && <div className="photo-upload-busy">上傳中…</div>}
+        <input ref={inputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handlePick}/>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:6, paddingTop:4 }}>
+        <button className="btn btn-ghost btn-sm" type="button" onClick={open} disabled={busy}>
+          <Icon name="camera" size={12}/> {value?'更換':'上傳'}
+        </button>
+        {value && !busy && (
+          <button className="btn btn-ghost btn-sm" type="button" onClick={()=>onChange('')}>
+            移除
+          </button>
+        )}
+        {err && <div style={{ fontSize:11, color:'var(--terracotta)', maxWidth:160 }}>{err}</div>}
+      </div>
+    </div>
+  );
+};
+
+// 列表縮圖
+const PhotoThumb = ({ url, size = 40, alt = '' }) => (
+  <div style={{ width:size, height:size, borderRadius:6, overflow:'hidden', background:'var(--paper-deep)', flexShrink:0,
+                display:'flex', alignItems:'center', justifyContent:'center', color:'var(--ink-faint)' }}>
+    {url
+      ? <img src={cldThumb(url, size*2)} alt={alt} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} loading="lazy"/>
+      : <Icon name="image" size={Math.min(20, Math.round(size*0.5))}/>
+    }
+  </div>
+);
+
+Object.assign(window, { Modal, Sparkline, BarList, Ring, Pill, EmptyState, Segmented, PhotoUpload, PhotoThumb, uploadToCloudinary, cldThumb });
