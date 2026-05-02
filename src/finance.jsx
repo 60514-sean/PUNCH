@@ -247,12 +247,12 @@ const InventoryView = ({ state, setState }) => {
   const [modalOpen, setModalOpen] = useStateF(false);
   const [adjOpen, setAdjOpen] = useStateF(false);
   const [editingId, setEditingId] = useStateF(null);
-  const [form, setForm] = useStateF({ id:'', kind:'material', name:'', cat:'', unit:'', qty:'', min:'', price:'', photo:'', note:'' });
+  const [form, setForm] = useStateF({ id:'', kind:'material', name:'', cat:'', unit:'', qty:'', min:'', price:'', photo:'', note:'', loc:'' });
   const [adj, setAdj] = useStateF({ id:'', name:'', current:0, type:'add', qty:'', note:'' });
   const [noteView, setNoteView] = useStateF(null); // 點圖示要看的品項
 
   const openNew = () => {
-    setForm({ id:'', kind: tab==='goods'?'goods':'material', name:'', cat:'', unit:'', qty:'', min:'', price:'', photo:'', note:'' });
+    setForm({ id:'', kind: tab==='goods'?'goods':'material', name:'', cat:'', unit:'', qty:'', min:'', price:'', photo:'', note:'', loc:'' });
     setEditingId(null); setModalOpen(true);
   };
   const openEdit = (s) => { setForm({...s}); setEditingId(s.id); setModalOpen(true); };
@@ -396,7 +396,7 @@ const InventoryView = ({ state, setState }) => {
                             {s.name}
                             {low && <Pill tone="terracotta" dot>低於底線</Pill>}
                           </div>
-                          <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>{s.cat} · 更新 {fmtDateFull(s.updated)}</div>
+                          <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>{[s.cat, '更新 '+fmtDateFull(s.updated)].filter(Boolean).join(' · ')}</div>
                         </div>
                       </div>
                     </td>
@@ -408,11 +408,14 @@ const InventoryView = ({ state, setState }) => {
                     <td className="num" style={{ fontWeight:700 }}>{fmtMoney(s.qty*s.price)}</td>
                     <td>
                       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
-                        <div style={{ width:22, display:'flex', alignItems:'center' }}>
-                          {s.note && <button type="button" title="檢視備註" onClick={(e)=>{e.stopPropagation();setNoteView(s);}}
-                            style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', padding:2, border:'none', background:'none', cursor:'pointer', color:'var(--ink-mute)', borderRadius:4 }}><Icon name="note" size={14}/></button>}
+                        <div style={{ display:'flex', alignItems:'center', gap:8, minWidth:0 }}>
+                          <div style={{ width:22, display:'flex', alignItems:'center', flexShrink:0 }}>
+                            {s.note && <button type="button" title="檢視備註" onClick={(e)=>{e.stopPropagation();setNoteView(s);}}
+                              style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', padding:2, border:'none', background:'none', cursor:'pointer', color:'var(--ink-mute)', borderRadius:4 }}><Icon name="note" size={14}/></button>}
+                          </div>
+                          {s.loc && <span style={{ fontSize:11, color:'var(--ink-mute)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>位置 {s.loc}</span>}
                         </div>
-                        <div style={{ display:'flex', gap:4 }}>
+                        <div style={{ display:'flex', gap:4, flexShrink:0 }}>
                           <button className="btn btn-ghost btn-sm" onClick={()=>openAdj(s)}>進出貨</button>
                           <button className="btn btn-ghost btn-sm" onClick={()=>openEdit(s)}><Icon name="edit" size={12}/></button>
                         </div>
@@ -437,7 +440,7 @@ const InventoryView = ({ state, setState }) => {
                         {s.name}
                         {low && <Pill tone="terracotta" dot>低於底線</Pill>}
                       </div>
-                      <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>{s.cat} · 更新 {fmtDateFull(s.updated)}</div>
+                      <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>{[s.cat, '更新 '+fmtDateFull(s.updated)].filter(Boolean).join(' · ')}</div>
                       <div className="mono" style={{ marginTop:6, display:'flex', alignItems:'baseline', gap:6 }}>
                         <span style={{ fontSize:20, fontWeight:700, color: low?'var(--terracotta)':'var(--ink)' }}>{s.qty}</span>
                         <span style={{ fontSize:11, color:'var(--ink-mute)' }}>/ {s.min} {s.unit}</span>
@@ -450,6 +453,7 @@ const InventoryView = ({ state, setState }) => {
                   <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:10, paddingTop:8, borderTop:'1px dashed var(--rule-soft)' }}>
                     {s.note && <button type="button" title="檢視備註" onClick={(e)=>{e.stopPropagation();setNoteView(s);}}
                       style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', padding:6, border:'none', background:'none', cursor:'pointer', color:'var(--ink-mute)', borderRadius:4 }}><Icon name="note" size={15}/></button>}
+                    {s.loc && <span style={{ fontSize:11, color:'var(--ink-mute)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', minWidth:0 }}>位置 {s.loc}</span>}
                     <div style={{ flex:1 }}/>
                     <button className="btn btn-ghost btn-sm" onClick={(e)=>{e.stopPropagation();openAdj(s);}}>進出貨</button>
                     <button className="btn btn-ghost btn-sm" onClick={(e)=>{e.stopPropagation();openEdit(s);}}><Icon name="edit" size={11}/></button>
@@ -485,6 +489,7 @@ const InventoryView = ({ state, setState }) => {
             <div className="field"><label>分類</label><input className="input" value={form.cat} onChange={e=>setForm({...form,cat:e.target.value})}/></div>
             <div className="field"><label>單位</label><input className="input" value={form.unit} onChange={e=>setForm({...form,unit:e.target.value})}/></div>
           </div>
+          <div className="field"><label>倉儲位置</label><input className="input" value={form.loc} onChange={e=>setForm({...form,loc:e.target.value})} placeholder="例：A 區 - 架 2 / 倉庫 1F"/></div>
           <div className="row-3">
             <div className="field"><label>現有庫存</label><input className="input mono" type="number" value={form.qty} onChange={e=>setForm({...form,qty:e.target.value})}/></div>
             <div className="field"><label>安全底線</label><input className="input mono" type="number" value={form.min} onChange={e=>setForm({...form,min:e.target.value})}/></div>
