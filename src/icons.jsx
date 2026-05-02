@@ -71,7 +71,12 @@ const fmtDate = (s) => {
   const [y,m,d] = s.split('-');
   return `${parseInt(m)}/${parseInt(d)}`;
 };
-const fmtDateFull = (s) => !s ? '' : s.replace(/-/g,'/');
+const fmtDateFull = (s) => {
+  if (!s) return '';
+  // 容錯：GAS 偶爾把日期讀成 ISO 字串，截短成 YYYY-MM-DD
+  if (typeof s === 'string' && s.length > 10 && s.includes('T')) s = s.slice(0,10);
+  return String(s).replace(/-/g,'/');
+};
 const uid = () => 'id' + Math.random().toString(36).slice(2,9);
 const ym = (d) => d.slice(0,7);
 
