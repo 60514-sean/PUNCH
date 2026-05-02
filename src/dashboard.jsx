@@ -83,7 +83,11 @@ const Dashboard = ({ state, setState, goto, openTask, openOrder, ...props }) => 
           </div>
           <style>{`
             .goal-donut-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-            @media (max-width: 560px) { .goal-donut-grid { grid-template-columns: repeat(2, 1fr); gap: 14px 10px; } }
+            @media (max-width: 560px) {
+              .goal-donut-grid { grid-template-columns: 1fr; gap: 12px; }
+              .goal-donut-grid > * { flex-direction: row !important; gap: 14px !important; align-items: center !important; }
+              .goal-donut-grid > * > div:last-child { text-align: left !important; flex: 1; }
+            }
           `}</style>
         </div>
 
