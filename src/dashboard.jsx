@@ -75,12 +75,16 @@ const Dashboard = ({ state, setState, goto, openTask, openOrder, ...props }) => 
             <div className="card-title">月度達成</div>
             <div className="card-subtle">{thisMonth.replace('-','年')+' 月'}</div>
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:8 }}>
+          <div className="goal-donut-grid">
             <GoalDonut label="月營收" value={income} max={goals.revenue.target} color="var(--clay)" fmt={v=>fmtMoney(v,true)}/>
             <GoalDonut label="訂單數" value={goals.orders.actual} max={goals.orders.target} color="var(--sage)" fmt={v=>v+' 筆'}/>
             <GoalDonut label="新客戶" value={goals.newClients.actual} max={goals.newClients.target} color="var(--ochre)" fmt={v=>v+' 位'}/>
             <GoalDonut label="毛利率" value={goals.margin.actual} max={goals.margin.target} color="var(--moss)" fmt={v=>v+'%'}/>
           </div>
+          <style>{`
+            .goal-donut-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+            @media (max-width: 560px) { .goal-donut-grid { grid-template-columns: repeat(2, 1fr); gap: 14px 10px; } }
+          `}</style>
         </div>
 
         <WeekActionList state={state} setState={setState}/>
