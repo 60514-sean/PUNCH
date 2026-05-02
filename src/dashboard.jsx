@@ -42,6 +42,13 @@ const Dashboard = ({ state, setState, goto, openTask, openOrder, ...props }) => 
     setState(s => ({ ...s, tasks: s.tasks.map(t=>t.id===id?{...t, done:!t.done}:t) }));
   };
 
+  const removeTask = (id) => {
+    setState(s => ({ ...s, tasks: s.tasks.filter(t=>t.id!==id) }));
+    toast('已移除待辦');
+  };
+
+  const [openSwipeId, setOpenSwipeId] = useState(null);
+
   // inline task add
   const [taskInput, setTaskInput] = useState('');
   const [taskAdding, setTaskAdding] = useState(false);
@@ -62,48 +69,52 @@ const Dashboard = ({ state, setState, goto, openTask, openOrder, ...props }) => 
         </div>
       </div>
 
-      <div className="dash-grid">
-        {/* 左欄：目標 */}
-        <MonthGoalMethod state={state} setState={setState} income={income}/>
+      <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">月度達成</div>
+            <div className="card-subtle">{thisMonth.replace('-','年')+' 月'}</div>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:8 }}>
+            <GoalDonut label="月營收" value={income} max={goals.revenue.target} color="var(--clay)" fmt={v=>fmtMoney(v,true)}/>
+            <GoalDonut label="訂單數" value={goals.orders.actual} max={goals.orders.target} color="var(--sage)" fmt={v=>v+' 筆'}/>
+            <GoalDonut label="新客戶" value={goals.newClients.actual} max={goals.newClients.target} color="var(--ochre)" fmt={v=>v+' 位'}/>
+            <GoalDonut label="毛利率" value={goals.margin.actual} max={goals.margin.target} color="var(--moss)" fmt={v=>v+'%'}/>
+          </div>
+        </div>
 
-        {/* 右欄：月度進度 + 今日待辦 */}
-        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-          <div className="card">
-            <div className="card-head">
-              <div className="card-title">月度達成</div>
-              <div className="card-subtle">{thisMonth.replace('-','年')+' 月'}</div>
+        <WeekActionList state={state} setState={setState}/>
+
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <div className="card-title">今日待辦</div>
+              <div className="card-subtle">{todayTasks.length} 項未完成</div>
             </div>
-            <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-              <GoalRow label="月營收" value={income} max={goals.revenue.target} color="var(--clay)" fmt={v=>fmtMoney(v,true)}/>
-              <GoalRow label="訂單數" value={goals.orders.actual} max={goals.orders.target} color="var(--sage)" fmt={v=>v+' 筆'}/>
-              <GoalRow label="新客戶" value={goals.newClients.actual} max={goals.newClients.target} color="var(--ochre)" fmt={v=>v+' 位'}/>
-              <GoalRow label="毛利率" value={goals.margin.actual} max={goals.margin.target} color="var(--moss)" fmt={v=>v+'%'}/>
-            </div>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setTaskAdding(a=>!a)}>
+              <Icon name={taskAdding?'check':'plus'} size={12}/> {taskAdding?'完成':'新增'}
+            </button>
           </div>
 
-          <div className="card">
-            <div className="card-head">
-              <div>
-                <div className="card-title">今日待辦</div>
-                <div className="card-subtle">{todayTasks.length} 項未完成</div>
-              </div>
-              <button className="btn btn-ghost btn-sm" onClick={()=>setTaskAdding(a=>!a)}>
-                <Icon name={taskAdding?'check':'plus'} size={12}/> {taskAdding?'完成':'新增'}
-              </button>
+          {taskAdding && (
+            <div style={{ display:'flex', gap:6, marginBottom:12, alignItems:'stretch' }}>
+              <input className="input" autoFocus placeholder="輸入待辦，按 Enter 新增"
+                style={{ flex:1, minWidth:0 }}
+                value={taskInput} onChange={e=>setTaskInput(e.target.value)}
+                onKeyDown={e=>{ if(e.key==='Enter') addTaskInline(); if(e.key==='Escape'){ setTaskAdding(false); setTaskInput(''); } }}/>
+              <button className="btn btn-primary btn-sm" onClick={addTaskInline}
+                style={{ flexShrink:0, whiteSpace:'nowrap' }}>加入</button>
             </div>
+          )}
 
-            {taskAdding && (
-              <div style={{ display:'flex', gap:6, marginBottom:12 }}>
-                <input className="input" autoFocus placeholder="輸入待辦，按 Enter 新增"
-                  value={taskInput} onChange={e=>setTaskInput(e.target.value)}
-                  onKeyDown={e=>{ if(e.key==='Enter') addTaskInline(); if(e.key==='Escape'){ setTaskAdding(false); setTaskInput(''); } }}/>
-                <button className="btn btn-primary btn-sm" onClick={addTaskInline}>加入</button>
-              </div>
-            )}
-
-            <div style={{ display:'flex', flexDirection:'column' }}>
-              {tasks.slice(0,10).map(t=>(
-                <div key={t.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'1px solid var(--rule-soft)' }}>
+          <div style={{ display:'flex', flexDirection:'column' }}>
+            {tasks.slice(0,10).map(t=>(
+              <SwipeableRow key={t.id}
+                isOpen={openSwipeId===t.id}
+                onOpen={()=>setOpenSwipeId(t.id)}
+                onClose={()=>setOpenSwipeId(null)}
+                onDelete={()=>{ removeTask(t.id); setOpenSwipeId(null); }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px' }}>
                   <button onClick={()=>toggleTask(t.id)} style={{
                     width:20, height:20, borderRadius:5, border:'1.5px solid '+(t.done?'var(--moss)':'var(--ink-faint)'),
                     background: t.done?'var(--moss)':'transparent', display:'flex', alignItems:'center', justifyContent:'center',
@@ -120,38 +131,113 @@ const Dashboard = ({ state, setState, goto, openTask, openOrder, ...props }) => 
                     </div>
                   </div>
                 </div>
-              ))}
-              {tasks.length===0 && <EmptyState icon="task" title="今日無待辦"/>}
-            </div>
+              </SwipeableRow>
+            ))}
+            {tasks.length===0 && <EmptyState icon="task" title="今日無待辦"/>}
           </div>
         </div>
       </div>
-
-      <style>{`
-        .dash-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 14px; align-items: start; }
-        @media (max-width: 900px) { .dash-grid { grid-template-columns: 1fr; } }
-      `}</style>
     </div>
   );
 };
 
-// Goal progress row
-const GoalRow = ({ label, value, max, color, fmt }) => {
-  const pct = Math.min(1, value/(max||1));
+// 往右滑動列 — 露出右側「刪除」按鈕
+const SwipeableRow = ({ children, onDelete, isOpen, onOpen, onClose }) => {
+  const REVEAL = 88;
+  const THRESHOLD = 36;
+  const DECIDE_PX = 6;
+  const [offset, setOffset] = React.useState(0);
+  const [dragging, setDragging] = React.useState(false);
+  const drag = React.useRef({ startX:0, startOff:0, active:false, decided:false });
+
+  React.useEffect(() => { setOffset(isOpen ? REVEAL : 0); }, [isOpen]);
+
+  const onPointerDown = (e) => {
+    drag.current = { startX:e.clientX, startOff:offset, active:true, decided:false };
+  };
+  const onPointerMove = (e) => {
+    if (!drag.current.active) return;
+    const dx = e.clientX - drag.current.startX;
+    if (!drag.current.decided) {
+      if (Math.abs(dx) < DECIDE_PX) return;
+      drag.current.decided = true;
+      setDragging(true);
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch(_){}
+    }
+    let next = drag.current.startOff + dx;
+    if (next < 0) next = 0;
+    if (next > REVEAL) next = REVEAL;
+    setOffset(next);
+  };
+  const onPointerUp = () => {
+    if (!drag.current.active) return;
+    const wasDecided = drag.current.decided;
+    drag.current.active = false;
+    if (wasDecided) {
+      setDragging(false);
+      if (offset > THRESHOLD) onOpen?.();
+      else onClose?.();
+    }
+  };
+
   return (
-    <div>
-      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-        <span className="goal-row-label">{label}</span>
-        <span className="mono goal-row-val">
-          <span style={{ fontWeight:700 }}>{fmt(value)}</span>
-          <span style={{ color:'var(--ink-faint)' }}> / {fmt(max)}</span>
-        </span>
+    <div style={{ position:'relative', overflow:'hidden', borderBottom:'1px solid var(--rule-soft)', userSelect:'none' }}>
+      <button onClick={onDelete} style={{
+        position:'absolute', left:0, top:0, bottom:0, width:REVEAL,
+        background:'var(--terracotta)', color:'#fff', border:'none',
+        display:'flex', alignItems:'center', justifyContent:'center', gap:5,
+        cursor:'pointer', fontSize:13, fontWeight:600
+      }}>
+        <Icon name="trash" size={14}/> 刪除
+      </button>
+      <div
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        style={{
+          transform: `translateX(${offset}px)`,
+          transition: dragging ? 'none' : 'transform 0.22s ease',
+          background: 'var(--paper-soft)',
+          position: 'relative', zIndex: 1,
+          touchAction: 'pan-y',
+        }}>
+        {children}
       </div>
-      <div className="bar">
-        <div className="bar-fill" style={{ width: pct*100+'%', background: color }}/>
+    </div>
+  );
+};
+
+// Goal donut (圓餅圖) — compact circular progress
+const GoalDonut = ({ label, value, max, color, fmt }) => {
+  const pct = Math.min(1, value/(max||1));
+  const reached = pct >= 1;
+  const size = 78;
+  const stroke = 9;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const dash = c * pct;
+  const cx = size / 2;
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, minWidth:0 }}>
+      <div style={{ position:'relative', width:size, height:size }}>
+        <svg width={size} height={size} style={{ transform:'rotate(-90deg)' }}>
+          <circle cx={cx} cy={cx} r={r} fill="none" stroke="var(--rule-soft)" strokeWidth={stroke}/>
+          <circle cx={cx} cy={cx} r={r} fill="none" stroke={color} strokeWidth={stroke}
+            strokeDasharray={`${dash} ${c}`} strokeLinecap="round"
+            style={{ transition:'stroke-dasharray 0.6s ease' }}/>
+        </svg>
+        <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <span className="mono" style={{ fontSize:15, fontWeight:700, color: reached?'var(--moss)':'var(--ink)' }}>
+            {Math.round(pct*100)}%
+          </span>
+        </div>
       </div>
-      <div className="goal-row-pct mono" style={{ color: pct>=1?'var(--moss)':'var(--ink-mute)' }}>
-        {Math.round(pct*100)}% {pct>=1?'· 已達成':''}
+      <div style={{ textAlign:'center', minWidth:0, width:'100%' }}>
+        <div style={{ fontSize:12, fontWeight:600, color:'var(--ink-soft)', marginBottom:2 }}>{label}</div>
+        <div className="mono" style={{ fontSize:10, color:'var(--ink-mute)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+          {fmt(value)}<span style={{ color:'var(--ink-faint)' }}> / {fmt(max)}</span>
+        </div>
       </div>
     </div>
   );
@@ -214,35 +300,17 @@ const DualLine = ({ data }) => {
   );
 };
 
-// ═══ 目標 ═══
+// ═══ 週行動清單 ═══
 const DAY_LABELS = ['周一','周二','周三','周四','周五','周六','周日'];
 const todayDayIdx = () => { const d = new Date().getDay(); return d===0 ? 6 : d-1; };
 
-const MonthGoalMethod = ({ state, setState, income }) => {
-  const { goals } = state;
+// 週行動清單 — day tabs + per-day action list
+const WeekActionList = ({ state, setState }) => {
   const weekPlan = state.weekPlan || Array.from({length:7}, ()=>[]);
-
   const [selDay, setSelDay] = React.useState(todayDayIdx);
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState('');
-  const [goalEdit, setGoalEdit] = React.useState(false);
-  const [goalDraft, setGoalDraft] = React.useState({});
 
-  const openGoalEdit = () => {
-    setGoalDraft({ revenue: goals.revenue.target, orders: goals.orders.target, newClients: goals.newClients.target, margin: goals.margin.target });
-    setGoalEdit(true);
-  };
-  const saveGoals = () => {
-    setState(s => ({ ...s, goals: { ...s.goals,
-      revenue:    { ...s.goals.revenue,    target: Number(goalDraft.revenue)    || s.goals.revenue.target },
-      orders:     { ...s.goals.orders,     target: Number(goalDraft.orders)     || s.goals.orders.target },
-      newClients: { ...s.goals.newClients, target: Number(goalDraft.newClients) || s.goals.newClients.target },
-      margin:     { ...s.goals.margin,     target: Number(goalDraft.margin)     || s.goals.margin.target },
-    }}));
-    setGoalEdit(false); toast('目標已更新');
-  };
-
-  const revPct = goals.revenue.target ? Math.min(100, Math.round(income/goals.revenue.target*100)) : 0;
   const dayTasks = weekPlan[selDay] || [];
 
   const updatePlan = (fn) => {
@@ -264,127 +332,93 @@ const MonthGoalMethod = ({ state, setState, income }) => {
   const doneCount = dayTasks.filter(t=>t.done).length;
 
   return (
-    <div className="card" style={{ padding:0, overflow:'hidden' }}>
-      {/* Header */}
-      <div style={{ padding:'14px 18px', borderBottom:'1px solid var(--rule-soft)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <div className="card-title">目標</div>
-        <button className="btn btn-ghost btn-sm" onClick={openGoalEdit}><Icon name="edit" size={13}/> 編輯</button>
+    <div className="card">
+      <div className="card-head">
+        <div className="card-title">週行動清單</div>
       </div>
 
-      {/* Goal edit form */}
-      {goalEdit && (
-        <div style={{ padding:'14px 18px', borderBottom:'1px solid var(--rule-soft)', background:'var(--paper-deep)' }}>
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            <div className="row">
-              <div className="field"><label>營收目標（元）</label><input className="input mono" type="number" value={goalDraft.revenue} onChange={e=>setGoalDraft({...goalDraft,revenue:e.target.value})}/></div>
-              <div className="field"><label>訂單目標（筆）</label><input className="input mono" type="number" value={goalDraft.orders} onChange={e=>setGoalDraft({...goalDraft,orders:e.target.value})}/></div>
-            </div>
-            <div className="row">
-              <div className="field"><label>新客目標（位）</label><input className="input mono" type="number" value={goalDraft.newClients} onChange={e=>setGoalDraft({...goalDraft,newClients:e.target.value})}/></div>
-              <div className="field"><label>毛利率目標（%）</label><input className="input mono" type="number" value={goalDraft.margin} onChange={e=>setGoalDraft({...goalDraft,margin:e.target.value})}/></div>
-            </div>
-            <div style={{ display:'flex', gap:8 }}>
-              <button className="btn btn-primary btn-sm" onClick={saveGoals}>儲存</button>
-              <button className="btn btn-ghost btn-sm" onClick={()=>setGoalEdit(false)}>取消</button>
-            </div>
-          </div>
+      {/* Day tab strip */}
+      <div style={{ display:'flex', gap:4, overflowX:'auto', paddingBottom:12 }}>
+        {DAY_LABELS.map((label, i) => {
+          const tasks = weekPlan[i] || [];
+          const done = tasks.filter(t=>t.done).length;
+          const isToday = i === todayDayIdx();
+          const isActive = selDay === i;
+          return (
+            <button key={i}
+              onClick={()=>{ setSelDay(i); setEditing(false); setDraft(''); }}
+              className={'btn btn-sm '+(isActive?'btn-ink':'btn-ghost')}
+              style={{ flexShrink:0, minWidth:54, position:'relative' }}>
+              {label}
+              {tasks.length>0 && (
+                <span style={{ marginLeft:3, fontSize:10, opacity:0.8, fontFamily:'var(--f-mono)' }}>{done}/{tasks.length}</span>
+              )}
+              {isToday && !isActive && (
+                <span style={{ position:'absolute', top:4, right:4, width:4, height:4, borderRadius:'50%', background:'var(--clay)', display:'block' }}/>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Day header */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, marginBottom:10, flexWrap:'nowrap' }}>
+        <div style={{ fontSize:13, fontWeight:700, color:'var(--ink-soft)', minWidth:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+          {DAY_LABELS[selDay]}行動清單
+          {dayTasks.length>0 && (
+            <span style={{ marginLeft:8, fontWeight:400, color:'var(--sage)', fontFamily:'var(--f-mono)', fontSize:12 }}>
+              {doneCount}/{dayTasks.length} 完成
+            </span>
+          )}
         </div>
+        <button className="btn btn-ghost btn-sm" onClick={()=>setEditing(e=>!e)}
+          style={{ flexShrink:0, whiteSpace:'nowrap', display:'inline-flex', alignItems:'center', gap:4 }}>
+          <Icon name={editing?'check':'plus'} size={12}/>
+          <span>{editing?'完成':'新增'}</span>
+        </button>
+      </div>
+
+      {/* Task list */}
+      {dayTasks.length===0 && !editing && (
+        <div style={{ fontSize:13, color:'var(--ink-mute)', padding:'6px 0' }}>尚未設定{DAY_LABELS[selDay]}的行動目標，點「新增」開始。</div>
       )}
 
-      {/* Monthly stats */}
-      {!goalEdit && (
-        <div style={{ padding:'14px 18px', borderBottom:'1px solid var(--rule-soft)' }}>
-          <div style={{ fontSize:19, fontWeight:700, lineHeight:1.3 }}>
-            月營收目標 <span style={{ color:'var(--clay)' }}>{fmtMoney(goals.revenue.target, true)}</span>
-            <span style={{ color:'var(--sage)', marginLeft:10 }}>已達 {revPct}%</span>
-          </div>
-          <div style={{ fontSize:13, color:'var(--ink-mute)', marginTop:5 }}>
-            訂單 {goals.orders.actual}/{goals.orders.target} · 新客 {goals.newClients.actual}/{goals.newClients.target} · 毛利率 {goals.margin.actual}%
-          </div>
-        </div>
-      )}
-
-      {/* Day tabs + task list */}
-      <div style={{ padding:'14px 18px 20px' }}>
-
-        {/* Day tab strip */}
-        <div style={{ display:'flex', gap:4, overflowX:'auto', paddingBottom:12 }}>
-          {DAY_LABELS.map((label, i) => {
-            const tasks = weekPlan[i] || [];
-            const done = tasks.filter(t=>t.done).length;
-            const isToday = i === todayDayIdx();
-            const isActive = selDay === i;
-            return (
-              <button key={i}
-                onClick={()=>{ setSelDay(i); setEditing(false); setDraft(''); }}
-                className={'btn btn-sm '+(isActive?'btn-ink':'btn-ghost')}
-                style={{ flexShrink:0, minWidth:54, position:'relative' }}>
-                {label}
-                {tasks.length>0 && (
-                  <span style={{ marginLeft:3, fontSize:10, opacity:0.8, fontFamily:'var(--f-mono)' }}>{done}/{tasks.length}</span>
-                )}
-                {isToday && !isActive && (
-                  <span style={{ position:'absolute', top:4, right:4, width:4, height:4, borderRadius:'50%', background:'var(--clay)', display:'block' }}/>
-                )}
+      <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+        {dayTasks.map(t => (
+          <div key={t.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', background:'var(--paper-deep)', borderRadius:7 }}>
+            <button onClick={()=>toggleTask(t.id)} style={{
+              width:20, height:20, borderRadius:5, flexShrink:0,
+              border:'1.5px solid '+(t.done?'var(--sage)':'var(--ink-faint)'),
+              background: t.done?'var(--sage)':'transparent',
+              cursor:'pointer', padding:0,
+              display:'flex', alignItems:'center', justifyContent:'center',
+            }}>
+              {t.done && <Icon name="check" size={11} style={{ color:'#fff' }}/>}
+            </button>
+            <div style={{ flex:1, fontSize:13, color: t.done?'var(--ink-mute)':'var(--ink)', textDecoration: t.done?'line-through':'none', lineHeight:1.5 }}>
+              {t.text}
+            </div>
+            {editing && (
+              <button className="btn btn-ghost btn-sm" onClick={()=>delTask(t.id)} style={{ padding:'3px 5px' }}>
+                <Icon name="close" size={10}/>
               </button>
-            );
-          })}
-        </div>
-
-        {/* Day header */}
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-          <div style={{ fontSize:13, fontWeight:700, color:'var(--ink-soft)' }}>
-            {DAY_LABELS[selDay]}行動清單
-            {dayTasks.length>0 && (
-              <span style={{ marginLeft:8, fontWeight:400, color:'var(--sage)', fontFamily:'var(--f-mono)', fontSize:12 }}>
-                {doneCount}/{dayTasks.length} 完成
-              </span>
             )}
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={()=>setEditing(e=>!e)}>
-            <Icon name={editing?'check':'plus'} size={12}/> {editing?'完成':'新增'}
+        ))}
+      </div>
+
+      {editing && (
+        <div style={{ display:'flex', gap:6, marginTop:10, alignItems:'stretch' }}>
+          <input className="input" autoFocus style={{ flex:1, minWidth:0 }}
+            placeholder={`新增${DAY_LABELS[selDay]}行動目標…`}
+            value={draft} onChange={e=>setDraft(e.target.value)}
+            onKeyDown={e=>{ if(e.key==='Enter') addTask(); if(e.key==='Escape'){ setEditing(false); setDraft(''); } }}/>
+          <button className="btn btn-primary btn-sm" onClick={addTask}
+            style={{ flexShrink:0, whiteSpace:'nowrap', display:'inline-flex', alignItems:'center', gap:4 }}>
+            <Icon name="plus" size={12}/><span>新增</span>
           </button>
         </div>
-
-        {/* Task list */}
-        {dayTasks.length===0 && !editing && (
-          <div style={{ fontSize:13, color:'var(--ink-mute)', padding:'6px 0' }}>尚未設定{DAY_LABELS[selDay]}的行動目標，點「新增」開始。</div>
-        )}
-
-        <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-          {dayTasks.map(t => (
-            <div key={t.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', background:'var(--paper-deep)', borderRadius:7 }}>
-              <button onClick={()=>toggleTask(t.id)} style={{
-                width:20, height:20, borderRadius:5, flexShrink:0,
-                border:'1.5px solid '+(t.done?'var(--sage)':'var(--ink-faint)'),
-                background: t.done?'var(--sage)':'transparent',
-                cursor:'pointer', padding:0,
-                display:'flex', alignItems:'center', justifyContent:'center',
-              }}>
-                {t.done && <Icon name="check" size={11} style={{ color:'#fff' }}/>}
-              </button>
-              <div style={{ flex:1, fontSize:13, color: t.done?'var(--ink-mute)':'var(--ink)', textDecoration: t.done?'line-through':'none', lineHeight:1.5 }}>
-                {t.text}
-              </div>
-              {editing && (
-                <button className="btn btn-ghost btn-sm" onClick={()=>delTask(t.id)} style={{ padding:'3px 5px' }}>
-                  <Icon name="close" size={10}/>
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {editing && (
-          <div style={{ display:'flex', gap:6, marginTop:10 }}>
-            <input className="input" autoFocus
-              placeholder={`新增${DAY_LABELS[selDay]}行動目標…`}
-              value={draft} onChange={e=>setDraft(e.target.value)}
-              onKeyDown={e=>{ if(e.key==='Enter') addTask(); if(e.key==='Escape'){ setEditing(false); setDraft(''); } }}/>
-            <button className="btn btn-primary btn-sm" onClick={addTask}><Icon name="plus" size={12}/> 新增</button>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 };

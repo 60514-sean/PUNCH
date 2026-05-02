@@ -111,15 +111,15 @@ const FinanceView = ({ state, setState }) => {
           <div className="sub">{mode==='month'?monthKey:'全部期間'} · {listRaw.length} 筆紀錄</div>
         </div>
         <div className="topbar-r">
-          <div style={{ display:'flex', gap:4, alignItems:'center', background:'var(--paper-soft)', border:'1px solid var(--rule)', borderRadius:8, padding:2 }}>
-            <button className="btn btn-ghost btn-sm" style={{ border:'none' }} onClick={()=>monthStep(-1)}><Icon name="chevronLeft" size={12}/></button>
-            <span className="mono" style={{ padding:'0 8px', fontSize:12, fontWeight:700, minWidth:76, textAlign:'center' }}>{monthKey}</span>
-            <button className="btn btn-ghost btn-sm" style={{ border:'none' }} onClick={()=>monthStep(1)}><Icon name="chevron" size={12}/></button>
+          <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+            <button className="btn btn-ghost btn-sm" onClick={()=>monthStep(-1)}><Icon name="chevronLeft" size={12}/></button>
+            <span className="btn btn-ghost btn-sm mono" style={{ minWidth:84, justifyContent:'center', cursor:'default', fontWeight:700 }}>{monthKey}</span>
+            <button className="btn btn-ghost btn-sm" onClick={()=>monthStep(1)}><Icon name="chevron" size={12}/></button>
           </div>
           <button className={'btn btn-sm '+(mode==='all'?'btn-ink':'btn-ghost')} onClick={()=>setMode(mode==='all'?'month':'all')}>
             {mode==='all'?'查看單月':'查看全部'}
           </button>
-          <button className="btn btn-primary" onClick={openNew}><Icon name="plus" size={14}/> 新增</button>
+          <button className="btn btn-primary btn-sm" onClick={openNew}><Icon name="plus" size={14}/> 新增</button>
         </div>
       </div>
 
@@ -311,16 +311,18 @@ const InventoryView = ({ state, setState }) => {
           <button className={'btn btn-sm '+(tab==='logs'?'btn-ink':'btn-ghost')} onClick={()=>setTab(tab==='logs'?'material':'logs')}>
             {tab==='logs'?'回到庫存':'進出貨紀錄'}
           </button>
-          <button className="btn btn-primary" onClick={openNew}><Icon name="plus" size={14}/> 新增品項</button>
+          <button className="btn btn-primary btn-sm" onClick={openNew}><Icon name="plus" size={14}/> 新增品項</button>
         </div>
       </div>
 
       {tab!=='logs' && (
-        <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
-          <Segmented options={[{value:'material',label:'材料庫存'},{value:'goods',label:'商品庫存'}]} value={tab} onChange={setTab}/>
+        <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
+          <button className={'btn btn-sm '+(tab==='material'?'btn-ink':'btn-ghost')} onClick={()=>setTab('material')}>材料庫存</button>
+          <button className={'btn btn-sm '+(tab==='goods'?'btn-ink':'btn-ghost')} onClick={()=>setTab('goods')}>商品庫存</button>
           <div style={{ position:'relative', flex:'1 1 200px', minWidth:200, maxWidth:320 }}>
-            <Icon name="search" size={14} style={{ position:'absolute', left:11, top:'50%', transform:'translateY(-50%)', color:'var(--ink-mute)' }}/>
-            <input className="input has-leading-icon" placeholder="搜尋…" value={q} onChange={e=>setQ(e.target.value)}/>
+            <Icon name="search" size={13} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--ink-mute)' }}/>
+            <input className="input has-leading-icon" placeholder="搜尋…" value={q} onChange={e=>setQ(e.target.value)}
+              style={{ padding:'6px 11px 6px 30px', fontSize:13, borderRadius:7 }}/>
           </div>
         </div>
       )}

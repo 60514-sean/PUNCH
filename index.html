@@ -13,20 +13,49 @@
 <body>
 <div id="root"></div>
 
+<script>
+// 一次性自動清除舊示範資料 — 在所有 JS 載入前執行
+(function() {
+  try {
+    var raw = localStorage.getItem('bangqi_state');
+    if (!raw) return;
+    var s = JSON.parse(raw);
+    if (!s) return;
+    var has = function(arr, ids) { return Array.isArray(arr) && arr.some(function(x){ return x && ids.indexOf(x.id) !== -1; }); };
+    var hit = false;
+    if (has(s.orders,    ['o1','o2','o3','o4','o5','o6','o7','o8'])) hit = true;
+    if (has(s.finances,  ['f1','f5','f10','f14','f18','f20','f21'])) hit = true;
+    if (has(s.stocks,    ['s1','s2','s3','g1','g2','g3','g4','g5'])) hit = true;
+    if (has(s.logs,      ['l1','l2','l3','l4','l5','l6','l7','l8'])) hit = true;
+    if (has(s.products,  ['p1','p2','p3','p4','p5'])) hit = true;
+    if (has(s.customers, ['c1','c2','c3','c4','c5','c6','c7','c8'])) hit = true;
+    if (has(s.tasks,     ['t1','t2','t3','t4','t5','t6','t7'])) hit = true;
+    if (has(s.quotes,    ['q1','q2'])) hit = true;
+    if (has(s.channels,  ['ch1','ch2','ch3','ch4','ch5','ch6'])) hit = true;
+    if (Array.isArray(s.monthMethods) && s.monthMethods.some(function(m){ return m && (m.id==='mm4'||m.id==='mm5'); })) hit = true;
+    if (s.goals && s.goals.month==='2026-04' && s.goals.revenue && s.goals.revenue.actual===64300) hit = true;
+    if (hit) {
+      localStorage.removeItem('bangqi_state');
+      console.log('[bangqi] 偵測到舊示範資料，已自動清空');
+    }
+  } catch(e){}
+})();
+</script>
+
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
-<script src="config.js"></script>
-<script src="data/seed-v2.js"></script>
-<script type="text/babel" src="src/icons.jsx"></script>
-<script type="text/babel" src="src/ui.jsx"></script>
-<script type="text/babel" src="src/dashboard.jsx"></script>
-<script type="text/babel" src="src/orders.jsx"></script>
-<script type="text/babel" src="src/finance.jsx"></script>
-<script type="text/babel" src="src/products.jsx"></script>
-<script type="text/babel" src="src/channels.jsx"></script>
-<script type="text/babel" src="src/settings.jsx"></script>
-<script type="text/babel" src="src/app.jsx"></script>
+<script src="config.js?v=20260502d"></script>
+<script src="data/seed-v2.js?v=20260502d"></script>
+<script type="text/babel" src="src/icons.jsx?v=20260502d"></script>
+<script type="text/babel" src="src/ui.jsx?v=20260502d"></script>
+<script type="text/babel" src="src/dashboard.jsx?v=20260502d"></script>
+<script type="text/babel" src="src/orders.jsx?v=20260502d"></script>
+<script type="text/babel" src="src/finance.jsx?v=20260502d"></script>
+<script type="text/babel" src="src/products.jsx?v=20260502d"></script>
+<script type="text/babel" src="src/channels.jsx?v=20260502d"></script>
+<script type="text/babel" src="src/settings.jsx?v=20260502d"></script>
+<script type="text/babel" src="src/app.jsx?v=20260502d"></script>
 </body>
 </html>

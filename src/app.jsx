@@ -58,7 +58,7 @@ const MOBILE_NAV = [
   { key:'orders', label:'訂單', icon:'orders' },
   { key:'finance', label:'收支', icon:'finance' },
   { key:'inventory', label:'庫存', icon:'inventory' },
-  { key:'product', label:'成本', icon:'product' },
+  { key:'quote', label:'報價單', icon:'quote' },
 ];
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
@@ -74,11 +74,42 @@ function mergeWithSeed(parsed) {
   return purgeOldTrash(parsed);
 }
 
+// 一次性遷移：偵測到任何舊示範資料殘留就自動清空
+const STATE_VERSION = 'v3-empty-2026-05-02';
+function isOldDemoState(parsed) {
+  if (!parsed) return false;
+  const has = (arr, ids) => Array.isArray(arr) && arr.some(x => x && ids.includes(x.id));
+  if (has(parsed.orders,    ['o1','o2','o3','o4','o5','o6','o7','o8'])) return true;
+  if (has(parsed.finances,  ['f1','f5','f10','f14','f18','f20','f21'])) return true;
+  if (has(parsed.stocks,    ['s1','s2','s3','g1','g2','g3','g4','g5'])) return true;
+  if (has(parsed.logs,      ['l1','l2','l3','l4','l5','l6','l7','l8'])) return true;
+  if (has(parsed.products,  ['p1','p2','p3','p4','p5'])) return true;
+  if (has(parsed.customers, ['c1','c2','c3','c4','c5','c6','c7','c8'])) return true;
+  if (has(parsed.tasks,     ['t1','t2','t3','t4','t5','t6','t7'])) return true;
+  if (has(parsed.quotes,    ['q1','q2'])) return true;
+  if (has(parsed.channels,  ['ch1','ch2','ch3','ch4','ch5','ch6'])) return true;
+  if (Array.isArray(parsed.monthMethods) && parsed.monthMethods.some(m=>m && (m.id==='mm4'||m.id==='mm5'))) return true;
+  if (parsed.goals && parsed.goals.month==='2026-04' && parsed.goals.revenue && parsed.goals.revenue.actual===64300) return true;
+  return false;
+}
+
 function App(){
   const [state, setState] = useSt(()=>{
     try {
+      const versionTag = localStorage.getItem('bangqi_state_version');
       const saved = localStorage.getItem('bangqi_state');
-      if (saved) return mergeWithSeed(JSON.parse(saved));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // 自動清除舊版示範資料
+        if (versionTag !== STATE_VERSION && isOldDemoState(parsed)) {
+          localStorage.removeItem('bangqi_state');
+          localStorage.setItem('bangqi_state_version', STATE_VERSION);
+          return JSON.parse(JSON.stringify(window.SEED));
+        }
+        localStorage.setItem('bangqi_state_version', STATE_VERSION);
+        return mergeWithSeed(parsed);
+      }
+      localStorage.setItem('bangqi_state_version', STATE_VERSION);
     } catch(e){}
     return JSON.parse(JSON.stringify(window.SEED));
   });

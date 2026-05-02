@@ -13,7 +13,7 @@ const TRASH_COLLS = [
 ];
 
 const SettingsView = ({ state, setState }) => {
-  const [tab, setTab] = useStateS('trash');
+  const [tab, setTab] = useStateS('goals');
   const [filter, setFilter] = useStateS('all');
 
   // Gather all deleted items
@@ -66,6 +66,9 @@ const SettingsView = ({ state, setState }) => {
       </div>
 
       <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+        <button className={'btn btn-sm '+(tab==='goals'?'btn-ink':'btn-ghost')} onClick={()=>setTab('goals')}>
+          <Icon name="edit" size={12}/> 月度目標
+        </button>
         <button className={'btn btn-sm '+(tab==='trash'?'btn-ink':'btn-ghost')} onClick={()=>setTab('trash')}>
           <Icon name="trash" size={12}/> 回收桶 {trashList.length>0 && <span style={{ opacity:0.7 }}>({trashList.length})</span>}
         </button>
@@ -73,6 +76,8 @@ const SettingsView = ({ state, setState }) => {
           <Icon name="settings" size={12}/> 關於
         </button>
       </div>
+
+      {tab==='goals' && <GoalSettings state={state} setState={setState}/>}
 
       {tab==='trash' && (
         <>
@@ -149,9 +154,30 @@ const SettingsView = ({ state, setState }) => {
           </div>
           <hr className="hr-soft" style={{ margin:'16px 0' }}/>
           <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-            <button className="btn btn-danger btn-sm" onClick={()=>{ if(confirm('重置所有資料為示範資料？')){ localStorage.removeItem('bangqi_state'); location.reload(); } }}>
-              重置為示範資料
-            </button>
+            <button className="btn btn-danger btn-sm" onClick={()=>{
+              if (!confirm('清空所有資料？\n\n所有訂單、收支、庫存、客戶、報價單等資料將永久刪除（無法復原）。\n\n月度目標將歸零，從零開始記錄。')) return;
+              const now = new Date();
+              const ym = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+              const empty = {
+                orders: [], finances: [], stocks: [], products: [], customers: [],
+                tasks: [], quotes: [], channels: [], logs: [], monthMethods: [],
+                weekPlan: [[],[],[],[],[],[],[]],
+                goals: {
+                  month: ym,
+                  revenue: { target: 0, actual: 0 },
+                  orders: { target: 0, actual: 0 },
+                  newClients: { target: 0, actual: 0 },
+                  margin: { target: 0, actual: 0 },
+                },
+              };
+              localStorage.setItem('bangqi_state', JSON.stringify(empty));
+              location.reload();
+            }}>清空所有資料</button>
+            <button className="btn btn-ghost btn-sm" onClick={()=>{
+              if(!confirm('載入示範資料？目前所有資料將被覆蓋。')) return;
+              localStorage.setItem('bangqi_state', JSON.stringify(window.DEMO_SEED));
+              location.reload();
+            }}>載入示範資料</button>
             <button className="btn btn-ghost btn-sm" onClick={()=>{
               const data = JSON.stringify(JSON.parse(localStorage.getItem('bangqi_state')||'{}'), null, 2);
               const blob = new Blob([data], {type:'application/json'});
@@ -164,6 +190,62 @@ const SettingsView = ({ state, setState }) => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+// 月度目標設定
+const GoalSettings = ({ state, setState }) => {
+  const { goals } = state;
+  const [draft, setDraft] = useStateS({
+    revenue: goals.revenue.target,
+    orders: goals.orders.target,
+    newClients: goals.newClients.target,
+    margin: goals.margin.target,
+  });
+
+  const save = () => {
+    setState(s => ({ ...s, goals: { ...s.goals,
+      revenue:    { ...s.goals.revenue,    target: Number(draft.revenue)    || s.goals.revenue.target },
+      orders:     { ...s.goals.orders,     target: Number(draft.orders)     || s.goals.orders.target },
+      newClients: { ...s.goals.newClients, target: Number(draft.newClients) || s.goals.newClients.target },
+      margin:     { ...s.goals.margin,     target: Number(draft.margin)     || s.goals.margin.target },
+    }}));
+    toast('目標已更新');
+  };
+
+  const reset = () => {
+    setDraft({
+      revenue: goals.revenue.target,
+      orders: goals.orders.target,
+      newClients: goals.newClients.target,
+      margin: goals.margin.target,
+    });
+    toast('已還原');
+  };
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <div>
+          <div className="card-title">月度目標設定</div>
+          <div className="card-subtle">設定本月營收、訂單、新客戶、毛利率目標</div>
+        </div>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+        <div className="row">
+          <div className="field"><label>營收目標（元）</label><input className="input mono" type="number" value={draft.revenue} onChange={e=>setDraft({...draft,revenue:e.target.value})}/></div>
+          <div className="field"><label>訂單目標（筆）</label><input className="input mono" type="number" value={draft.orders} onChange={e=>setDraft({...draft,orders:e.target.value})}/></div>
+        </div>
+        <div className="row">
+          <div className="field"><label>新客目標（位）</label><input className="input mono" type="number" value={draft.newClients} onChange={e=>setDraft({...draft,newClients:e.target.value})}/></div>
+          <div className="field"><label>毛利率目標（%）</label><input className="input mono" type="number" value={draft.margin} onChange={e=>setDraft({...draft,margin:e.target.value})}/></div>
+        </div>
+        <div style={{ display:'flex', gap:8 }}>
+          <button className="btn btn-primary btn-sm" onClick={save}>儲存目標</button>
+          <button className="btn btn-ghost btn-sm" onClick={reset}>還原</button>
+        </div>
+      </div>
     </div>
   );
 };

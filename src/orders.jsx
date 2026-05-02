@@ -13,7 +13,7 @@ const OrdersView = ({ state, setState, openOrder, pendingNew, clearPendingNew })
   }, [pendingNew]);
 
   function emptyOrder(){
-    return { id:'', no:'', client:'', product:'', amount:'', cost:'', date:'', status:'待處理', note:'' };
+    return { id:'', no:'', client:'', product:'', amount:'', cost:'', quote:'', date:'', status:'待處理', note:'' };
   }
 
   const openNew = () => {
@@ -72,7 +72,6 @@ const OrdersView = ({ state, setState, openOrder, pendingNew, clearPendingNew })
           <div className="sub">{state.orders.length} 筆訂單 · 小計 {fmtMoney(totalAmt,true)} · 毛利 {fmtMoney(totalProfit,true)}</div>
         </div>
         <div className="topbar-r">
-          <button className="btn btn-ghost"><Icon name="download" size={14}/> 匯出</button>
           <button className="btn btn-primary" onClick={openNew}><Icon name="plus" size={14}/> 新增訂單</button>
         </div>
       </div>
@@ -83,13 +82,14 @@ const OrdersView = ({ state, setState, openOrder, pendingNew, clearPendingNew })
             <Icon name="search" size={14} style={{ position:'absolute', left:11, top:'50%', transform:'translateY(-50%)', color:'var(--ink-mute)' }}/>
             <input className="input has-leading-icon" placeholder="搜尋客戶、產品或訂單編號…" value={q} onChange={e=>setQ(e.target.value)}/>
           </div>
-          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-            {['全部','待處理','進行中','出貨中','已完成','已取消'].map(s =>(
-              <button key={s} className={'btn btn-sm '+(filter===s?'btn-ink':'btn-ghost')} onClick={()=>setFilter(s)}>
-                {s} {s!=='全部' && <span style={{ opacity:0.7, marginLeft:2 }}>{tallies[s]||0}</span>}
-              </button>
-            ))}
-          </div>
+          <select className="select" value={filter} onChange={e=>setFilter(e.target.value)}
+            style={{ flexShrink:0, minWidth:160, maxWidth:240 }}>
+            {['全部','待處理','進行中','出貨中','已完成','已取消'].map(s => {
+              const total = state.orders.filter(o=>!o._deleted).length;
+              const count = s==='全部' ? total : (tallies[s]||0);
+              return <option key={s} value={s}>{s} ({count})</option>;
+            })}
+          </select>
         </div>
 
         <table className="tbl desk-only">
@@ -183,7 +183,15 @@ const OrdersView = ({ state, setState, openOrder, pendingNew, clearPendingNew })
           <div className="field"><label>產品／服務<span className="req">*</span></label><textarea className="textarea" value={form.product} onChange={e=>setForm({...form, product:e.target.value})}/></div>
           <div className="row-3">
             <div className="field"><label>金額</label><input className="input mono" type="number" value={form.amount} onChange={e=>setForm({...form, amount:e.target.value})}/></div>
-            <div className="field"><label>成本</label><input className="input mono" type="number" value={form.cost} onChange={e=>setForm({...form, cost:e.target.value})}/></div>
+            <div className="field">
+              <label>報價單</label>
+              <select className="select" value={form.quote||''} onChange={e=>setForm({...form, quote:e.target.value})}>
+                <option value="">— 不關聯 —</option>
+                {(state.quotes||[]).filter(q=>!q._deleted).map(q=>(
+                  <option key={q.id} value={q.num}>{q.num} · {q.client}</option>
+                ))}
+              </select>
+            </div>
             <div className="field"><label>交貨日</label><input className="input" type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})}/></div>
           </div>
           <div className="field"><label>備註</label><textarea className="textarea" value={form.note} onChange={e=>setForm({...form, note:e.target.value})}/></div>
