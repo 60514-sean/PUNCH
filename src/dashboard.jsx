@@ -82,11 +82,14 @@ const Dashboard = ({ state, setState, goto, openTask, openOrder, ...props }) => 
             <GoalDonut label="毛利率" value={goals.margin.actual} max={goals.margin.target} color="var(--moss)" fmt={v=>v+'%'}/>
           </div>
           <style>{`
-            .goal-donut-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+            .goal-donut-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; min-width: 0; }
+            .goal-donut-grid > * { min-width: 0; }
             @media (max-width: 560px) {
-              .goal-donut-grid { grid-template-columns: 1fr; gap: 12px; }
-              .goal-donut-grid > * { flex-direction: row !important; gap: 14px !important; align-items: center !important; }
-              .goal-donut-grid > * > div:last-child { text-align: left !important; flex: 1; }
+              .goal-donut-grid { gap: 4px; }
+              .donut-circle { width: 54px !important; height: 54px !important; }
+              .donut-pct { font-size: 11px !important; }
+              .donut-label { font-size: 10.5px !important; }
+              .donut-value { font-size: 9px !important; }
             }
           `}</style>
         </div>
@@ -220,30 +223,30 @@ const SwipeableRow = ({ children, onDelete, isOpen, onOpen, onClose }) => {
 const GoalDonut = ({ label, value, max, color, fmt }) => {
   const pct = Math.min(1, value/(max||1));
   const reached = pct >= 1;
-  const size = 78;
+  const VB = 78; // SVG viewBox 內部座標
   const stroke = 9;
-  const r = (size - stroke) / 2;
+  const r = (VB - stroke) / 2;
   const c = 2 * Math.PI * r;
   const dash = c * pct;
-  const cx = size / 2;
+  const cx = VB / 2;
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, minWidth:0 }}>
-      <div style={{ position:'relative', width:size, height:size }}>
-        <svg width={size} height={size} style={{ transform:'rotate(-90deg)' }}>
+    <div className="donut-item" style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, minWidth:0 }}>
+      <div className="donut-circle" style={{ position:'relative', width:78, height:78 }}>
+        <svg viewBox={`0 0 ${VB} ${VB}`} style={{ width:'100%', height:'100%', display:'block', transform:'rotate(-90deg)' }}>
           <circle cx={cx} cy={cx} r={r} fill="none" stroke="var(--rule-soft)" strokeWidth={stroke}/>
           <circle cx={cx} cy={cx} r={r} fill="none" stroke={color} strokeWidth={stroke}
             strokeDasharray={`${dash} ${c}`} strokeLinecap="round"
             style={{ transition:'stroke-dasharray 0.6s ease' }}/>
         </svg>
         <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <span className="mono" style={{ fontSize:15, fontWeight:700, color: reached?'var(--moss)':'var(--ink)' }}>
+          <span className="mono donut-pct" style={{ fontSize:15, fontWeight:700, color: reached?'var(--moss)':'var(--ink)' }}>
             {Math.round(pct*100)}%
           </span>
         </div>
       </div>
-      <div style={{ textAlign:'center', minWidth:0, width:'100%' }}>
-        <div style={{ fontSize:12, fontWeight:600, color:'var(--ink-soft)', marginBottom:2 }}>{label}</div>
-        <div className="mono" style={{ fontSize:10, color:'var(--ink-mute)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+      <div className="donut-text" style={{ textAlign:'center', minWidth:0, width:'100%' }}>
+        <div className="donut-label" style={{ fontSize:12, fontWeight:600, color:'var(--ink-soft)', marginBottom:2 }}>{label}</div>
+        <div className="mono donut-value" style={{ fontSize:10, color:'var(--ink-mute)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
           {fmt(value)}<span style={{ color:'var(--ink-faint)' }}> / {fmt(max)}</span>
         </div>
       </div>
