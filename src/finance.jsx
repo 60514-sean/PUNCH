@@ -521,19 +521,21 @@ const InventoryView = ({ state, setState }) => {
               {[...items].sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant',{ numeric:true, sensitivity:'base' })).map(s => {
                 const low = s.qty <= s.min;
                 return (
-                  <div key={s.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', border:'1px solid var(--rule-soft)', borderRadius:8, fontSize:13, flexWrap:'wrap' }}>
-                    <div style={{ flex:'1 1 140px', minWidth:0, display:'flex', alignItems:'center', gap:6 }}>
+                  <div key={s.id} className="text-row">
+                    <div className="text-row-info">
                       <span style={{ fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.name}</span>
                       {low && <Pill tone="terracotta" dot>低</Pill>}
+                      <span className="mono" style={{ color: low?'var(--terracotta)':'var(--ink)', fontWeight:700, fontSize:14 }}>{s.qty}</span>
+                      <span className="mono" style={{ fontSize:11, color:'var(--ink-mute)' }}>/ {s.min} {s.unit}</span>
+                      {s.loc && <span style={{ fontSize:11, color:'var(--ink-mute)' }}>· 位置 {s.loc}</span>}
+                      <span className="mono" style={{ fontSize:11, color:'var(--ink-mute)' }}>· 小計 {fmtMoney(s.qty*s.price)}</span>
                     </div>
-                    <span className="mono" style={{ flexShrink:0, color: low?'var(--terracotta)':'var(--ink)', fontWeight:700, fontSize:14 }}>{s.qty}</span>
-                    <span className="mono" style={{ flexShrink:0, fontSize:11, color:'var(--ink-mute)' }}>/ {s.min} {s.unit}</span>
-                    {s.loc && <span style={{ flexShrink:0, fontSize:11, color:'var(--ink-mute)' }}>· 位置 {s.loc}</span>}
-                    <span className="mono" style={{ flexShrink:0, fontSize:11, color:'var(--ink-mute)' }}>· 小計 {fmtMoney(s.qty*s.price)}</span>
-                    {s.note && <button type="button" title="檢視備註" onClick={(e)=>{e.stopPropagation();setNoteView(s);}}
-                      style={{ flexShrink:0, display:'inline-flex', alignItems:'center', justifyContent:'center', padding:2, border:'none', background:'none', cursor:'pointer', color:'var(--ink-mute)', borderRadius:4 }}><Icon name="note" size={13}/></button>}
-                    <button className="btn btn-ghost btn-sm" style={{ flexShrink:0, padding:'4px 8px', fontSize:12 }} onClick={()=>openAdj(s)}>進出貨</button>
-                    <button className="btn btn-ghost btn-sm" style={{ flexShrink:0, padding:'4px 8px', fontSize:12 }} onClick={()=>openEdit(s)}><Icon name="edit" size={11}/></button>
+                    <div className="text-row-actions">
+                      {s.note && <button type="button" title="檢視備註" onClick={(e)=>{e.stopPropagation();setNoteView(s);}}
+                        style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', padding:2, border:'none', background:'none', cursor:'pointer', color:'var(--ink-mute)', borderRadius:4 }}><Icon name="note" size={13}/></button>}
+                      <button className="btn btn-ghost btn-sm" style={{ padding:'4px 8px', fontSize:12 }} onClick={()=>openAdj(s)}>進出貨</button>
+                      <button className="btn btn-ghost btn-sm" style={{ padding:'4px 8px', fontSize:12 }} onClick={()=>openEdit(s)}><Icon name="edit" size={11}/></button>
+                    </div>
                   </div>
                 );
               })}
