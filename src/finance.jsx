@@ -327,8 +327,8 @@ const InventoryView = ({ state, setState }) => {
       </div>
 
       {tab!=='logs' && (
-        <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
-          <div style={{ position:'relative', flex:'1 1 200px', minWidth:140 }}>
+        <div style={{ display:'flex', gap:6, flexWrap:'nowrap', alignItems:'center' }}>
+          <div style={{ position:'relative', flex:'1 1 0', minWidth:60 }}>
             <Icon name="search" size={13} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--ink-mute)' }}/>
             <input className="input has-leading-icon" placeholder="搜尋…" value={q} onChange={e=>setQ(e.target.value)}
               style={{ padding:'6px 11px 6px 30px', fontSize:13, borderRadius:7, width:'100%' }}/>

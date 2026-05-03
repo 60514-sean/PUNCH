@@ -316,6 +316,10 @@ input, select, textarea { font-family: inherit; color: inherit; }
   border-radius: 6px; cursor: pointer; transition: all 0.12s;
 }
 .seg button.active { background: var(--paper-soft); color: var(--ink); box-shadow: var(--sh-1); }
+/* 手機：segmented button 縮小 padding/font，避免擠不下 */
+@media (max-width: 480px) {
+  .seg button { padding: 5px 8px; font-size: 11px; }
+}
 
 /* ═══ Mobile ═══ */
 .mobile-topbar, .mobile-nav, .mobile-menu { display: none; }
