@@ -12,8 +12,18 @@ const ProductsView = ({ state, setState }) => {
 
   function emptyP(){ return { id:'', name:'', spec:'', direct:0, indirect:0, directItems:[], indirectItems:[], price:'', minPrice:'' }; }
 
+  // 升級舊版明細（只有 n + a）→ 新版（n + unit_q[量詞文字] + unit_p + qty + a）
+  // 邏輯：舊資料的 a 視為 unit_p，unit_q 是量詞文字（個/條/包），qty 預設 1
+  const upgradeItems = (arr) => (arr||[]).map(it => ({
+    n: it.n || '',
+    unit_q: typeof it.unit_q === 'string' ? it.unit_q : '',
+    unit_p: it.unit_p != null ? (Number(it.unit_p) || 0) : (Number(it.a) || 0),
+    qty:    it.qty    != null ? (Number(it.qty)    || 1) : 1,
+    a:      it.a      != null ? (Number(it.a)      || 0) : 0,
+  }));
+
   const openNew = () => { setForm(emptyP()); setEditingId(null); setModalOpen(true); };
-  const openEdit = (p) => { setForm({...p, directItems:[...(p.directItems||[])], indirectItems:[...(p.indirectItems||[])]}); setEditingId(p.id); setModalOpen(true); };
+  const openEdit = (p) => { setForm({...p, directItems:upgradeItems(p.directItems), indirectItems:upgradeItems(p.indirectItems)}); setEditingId(p.id); setModalOpen(true); };
 
   const sumItems = (arr) => (arr||[]).reduce((a,b)=>a+(Number(b.a)||0),0);
   const directSum = sumItems(form.directItems);
@@ -21,19 +31,51 @@ const ProductsView = ({ state, setState }) => {
   const directEff = (form.directItems||[]).length ? directSum : Number(form.direct)||0;
   const indirectEff = (form.indirectItems||[]).length ? indirectSum : Number(form.indirect)||0;
 
-  const addItem = (kind) => setForm(f => ({ ...f, [kind+'Items']: [...(f[kind+'Items']||[]), { n:'', a:0 }] }));
-  const updItem = (kind, i, k, v) => setForm(f => ({ ...f, [kind+'Items']: (f[kind+'Items']||[]).map((x,idx)=>idx===i?{...x,[k]: k==='a'?(Number(v)||0):v}:x) }));
-  // 名稱輸入時若完整匹配庫存品項名稱，自動帶入該品項單價
+  // 小計 = 單價 × 數量（單位量為量詞文字，不參與計算）
+  const recalcA = (it) => {
+    const up = Number(it.unit_p ?? 0) || 0;
+    const q  = Number(it.qty    ?? 1) || 0;
+    return up * q;
+  };
+
+  const addItem = (kind) => setForm(f => ({ ...f, [kind+'Items']: [...(f[kind+'Items']||[]), { n:'', unit_q:'', unit_p:0, qty:1, a:0 }] }));
+
+  const updItem = (kind, i, k, v) => setForm(f => ({
+    ...f,
+    [kind+'Items']: (f[kind+'Items']||[]).map((x, idx) => {
+      if (idx !== i) return x;
+      const numFields = ['unit_p', 'qty', 'a'];
+      const newVal = numFields.includes(k) ? (Number(v) || 0) : v;
+      const updated = { ...x, [k]: newVal };
+      // 單價/數量變動 → 自動重算小計
+      if (k === 'unit_p' || k === 'qty') {
+        updated.a = recalcA(updated);
+      }
+      return updated;
+    })
+  }));
+
+  // 名稱輸入時若完整匹配庫存品項名稱，自動帶入該品項的「單位（量詞）」與「單價」，並重算小計
   const pickStockForItem = (kind, i, name) => setForm(f => ({
     ...f,
     [kind+'Items']: (f[kind+'Items']||[]).map((x,idx) => {
       if (idx !== i) return x;
-      const stock = state.stocks.find(s => !s._deleted && s.name === name);
-      return (stock && stock.price != null)
-        ? { ...x, n: name, a: Number(stock.price) || 0 }
-        : { ...x, n: name };
+      const trimmed = (name || '').trim();
+      const stock = state.stocks.find(s => !s._deleted && s.name === trimmed);
+      if (stock) {
+        const updated = {
+          ...x,
+          n: name,
+          unit_q: stock.unit || x.unit_q || '',
+          unit_p: Number(stock.price) || 0, // 一律覆寫成庫存單價
+        };
+        updated.a = recalcA(updated);
+        return updated;
+      }
+      return { ...x, n: name };
     })
   }));
+
   const delItem = (kind, i) => setForm(f => ({ ...f, [kind+'Items']: (f[kind+'Items']||[]).filter((_,idx)=>idx!==i) }));
 
   const save = () => {
@@ -217,8 +259,14 @@ const ProductsView = ({ state, setState }) => {
           <button className="btn btn-primary" onClick={save}>儲存</button>
         </>}>
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-          <datalist id="products-stock-items">
-            {state.stocks.filter(s=>!s._deleted).map(s=>(
+          {/* 直接成本：排除「包材」類；間接成本：只有「包材」類 */}
+          <datalist id="products-stock-direct">
+            {state.stocks.filter(s=>!s._deleted && s.kind!=='packaging').map(s=>(
+              <option key={s.id} value={s.name}/>
+            ))}
+          </datalist>
+          <datalist id="products-stock-indirect">
+            {state.stocks.filter(s=>!s._deleted && s.kind==='packaging').map(s=>(
               <option key={s.id} value={s.name}/>
             ))}
           </datalist>
@@ -231,10 +279,17 @@ const ProductsView = ({ state, setState }) => {
               <button type="button" className="btn btn-ghost btn-sm" onClick={()=>addItem('direct')}><Icon name="plus" size={11}/> 加入項目</button>
             </div>
             {(form.directItems||[]).map((it,i)=>(
-              <div key={i} style={{ display:'grid', gridTemplateColumns:'1fr 110px 28px', gap:6, marginBottom:6 }}>
-                <input className="input" style={{ padding:'6px 9px', fontSize:12 }} placeholder="項目（可選庫存或自填）" value={it.n} list="products-stock-items" onChange={e=>pickStockForItem('direct',i,e.target.value)}/>
-                <input className="input mono" style={{ padding:'6px 9px', fontSize:12 }} type="number" placeholder="金額" value={it.a} onChange={e=>updItem('direct',i,'a',e.target.value)}/>
-                <button type="button" className="btn btn-ghost btn-sm" style={{ padding:'4px' }} onClick={()=>delItem('direct',i)}><Icon name="close" size={11}/></button>
+              <div key={i} style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:8, padding:8, background:'var(--paper-soft)', borderRadius:6, border:'1px solid var(--rule-soft)' }}>
+                <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                  <input className="input" style={{ flex:1, padding:'6px 9px', fontSize:12 }} placeholder="項目（可選庫存或自填）" value={it.n} list="products-stock-direct" onChange={e=>pickStockForItem('direct',i,e.target.value)}/>
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ padding:'4px', flexShrink:0 }} onClick={()=>delItem('direct',i)}><Icon name="close" size={11}/></button>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(4, minmax(0,1fr))', gap:6 }}>
+                  <div><div style={{ fontSize:10, color:'var(--ink-mute)', marginBottom:2 }}>單位量</div><input className="input" style={{ padding:'4px 7px', fontSize:11, width:'100%' }} type="text" placeholder="個/條/包" value={it.unit_q || ''} onChange={e=>updItem('direct',i,'unit_q',e.target.value)}/></div>
+                  <div><div style={{ fontSize:10, color:'var(--ink-mute)', marginBottom:2 }}>單價</div><input className="input mono" style={{ padding:'4px 7px', fontSize:11, width:'100%' }} type="number" value={it.unit_p ?? 0} onChange={e=>updItem('direct',i,'unit_p',e.target.value)}/></div>
+                  <div><div style={{ fontSize:10, color:'var(--ink-mute)', marginBottom:2 }}>數量</div><input className="input mono" style={{ padding:'4px 7px', fontSize:11, width:'100%' }} type="number" value={it.qty ?? 1} onChange={e=>updItem('direct',i,'qty',e.target.value)}/></div>
+                  <div><div style={{ fontSize:10, color:'var(--ink-mute)', marginBottom:2 }}>小計</div><input className="input mono" style={{ padding:'4px 7px', fontSize:11, width:'100%', background:'var(--paper-deep)', fontWeight:700 }} type="number" value={it.a ?? 0} readOnly/></div>
+                </div>
               </div>
             ))}
             {(form.directItems||[]).length===0 && <div style={{ fontSize:11, color:'var(--ink-faint)', padding:'6px 0' }}>尚未加入明細，可直接填寫下方總額</div>}
@@ -260,10 +315,17 @@ const ProductsView = ({ state, setState }) => {
               <button type="button" className="btn btn-ghost btn-sm" onClick={()=>addItem('indirect')}><Icon name="plus" size={11}/> 加入項目</button>
             </div>
             {(form.indirectItems||[]).map((it,i)=>(
-              <div key={i} style={{ display:'grid', gridTemplateColumns:'1fr 110px 28px', gap:6, marginBottom:6 }}>
-                <input className="input" style={{ padding:'6px 9px', fontSize:12 }} placeholder="項目（可選庫存或自填）" value={it.n} list="products-stock-items" onChange={e=>pickStockForItem('indirect',i,e.target.value)}/>
-                <input className="input mono" style={{ padding:'6px 9px', fontSize:12 }} type="number" placeholder="金額" value={it.a} onChange={e=>updItem('indirect',i,'a',e.target.value)}/>
-                <button type="button" className="btn btn-ghost btn-sm" style={{ padding:'4px' }} onClick={()=>delItem('indirect',i)}><Icon name="close" size={11}/></button>
+              <div key={i} style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:8, padding:8, background:'var(--paper-soft)', borderRadius:6, border:'1px solid var(--rule-soft)' }}>
+                <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                  <input className="input" style={{ flex:1, padding:'6px 9px', fontSize:12 }} placeholder="項目（可選庫存或自填）" value={it.n} list="products-stock-indirect" onChange={e=>pickStockForItem('indirect',i,e.target.value)}/>
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ padding:'4px', flexShrink:0 }} onClick={()=>delItem('indirect',i)}><Icon name="close" size={11}/></button>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(4, minmax(0,1fr))', gap:6 }}>
+                  <div><div style={{ fontSize:10, color:'var(--ink-mute)', marginBottom:2 }}>單位量</div><input className="input" style={{ padding:'4px 7px', fontSize:11, width:'100%' }} type="text" placeholder="個/條/包" value={it.unit_q || ''} onChange={e=>updItem('indirect',i,'unit_q',e.target.value)}/></div>
+                  <div><div style={{ fontSize:10, color:'var(--ink-mute)', marginBottom:2 }}>單價</div><input className="input mono" style={{ padding:'4px 7px', fontSize:11, width:'100%' }} type="number" value={it.unit_p ?? 0} onChange={e=>updItem('indirect',i,'unit_p',e.target.value)}/></div>
+                  <div><div style={{ fontSize:10, color:'var(--ink-mute)', marginBottom:2 }}>數量</div><input className="input mono" style={{ padding:'4px 7px', fontSize:11, width:'100%' }} type="number" value={it.qty ?? 1} onChange={e=>updItem('indirect',i,'qty',e.target.value)}/></div>
+                  <div><div style={{ fontSize:10, color:'var(--ink-mute)', marginBottom:2 }}>小計</div><input className="input mono" style={{ padding:'4px 7px', fontSize:11, width:'100%', background:'var(--paper-deep)', fontWeight:700 }} type="number" value={it.a ?? 0} readOnly/></div>
+                </div>
               </div>
             ))}
             {(form.indirectItems||[]).length===0 && <div style={{ fontSize:11, color:'var(--ink-faint)', padding:'6px 0' }}>尚未加入明細，可直接填寫下方總額</div>}
