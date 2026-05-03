@@ -406,7 +406,11 @@ function App(){
       <div id="toast" className="toast"/>
 
       <button type="button" aria-label="回到頂部" title="回到頂部"
-        onClick={()=>window.scrollTo({ top:0, behavior:'smooth' })}
+        onClick={()=>{
+          try { window.scrollTo({ top:0, behavior:'smooth' }); } catch { window.scrollTo(0,0); }
+          if (document.documentElement) document.documentElement.scrollTop = 0;
+          if (document.body) document.body.scrollTop = 0;
+        }}
         style={{
           position:'fixed',
           right:16,
