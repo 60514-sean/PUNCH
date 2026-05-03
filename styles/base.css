@@ -182,6 +182,9 @@ input, select, textarea { font-family: inherit; color: inherit; }
 .row { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
 .row-3 { display: grid; gap: 10px; grid-template-columns: 1fr 1fr 1fr; }
 .row > *, .row-3 > * { min-width: 0; }
+/* row-keep: 永遠兩欄不受 900px media 影響（給 modal 內欄位用） */
+.row-keep { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+.row-keep > * { min-width: 0; }
 
 /* iOS / Android 一致化 input[type=date] */
 .input[type="date"] {

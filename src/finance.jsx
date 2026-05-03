@@ -528,7 +528,7 @@ const InventoryView = ({ state, setState }) => {
             <PhotoUpload value={form.photo} onChange={(url)=>setForm({...form, photo:url})} size={120}/>
           </div>
           <div className="field"><label>名稱<span className="req">*</span></label><input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></div>
-          <div className="row">
+          <div className="row-keep">
             <div className="field"><label>分類</label>
               <select className="select" value={form.kind} onChange={e=>setForm({...form, kind:e.target.value})}>
                 {KIND_OPTS.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
@@ -536,11 +536,11 @@ const InventoryView = ({ state, setState }) => {
             </div>
             <div className="field"><label>單位</label><input className="input" value={form.unit} onChange={e=>setForm({...form,unit:e.target.value})}/></div>
           </div>
-          <div className="row">
+          <div className="row-keep">
             <div className="field"><label>現有庫存</label><input className="input mono" type="number" value={form.qty} onChange={e=>setForm({...form,qty:e.target.value})}/></div>
             <div className="field"><label>安全底線</label><input className="input mono" type="number" value={form.min} onChange={e=>setForm({...form,min:e.target.value})}/></div>
           </div>
-          <div className="row">
+          <div className="row-keep">
             <div className="field"><label>倉儲位置</label><input className="input" value={form.loc} onChange={e=>setForm({...form,loc:e.target.value})} placeholder="例：A 區 - 架 2"/></div>
             <div className="field"><label>單價成本</label><input className="input mono" type="number" value={form.price} onChange={e=>setForm({...form,price:e.target.value})}/></div>
           </div>
