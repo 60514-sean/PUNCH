@@ -130,7 +130,7 @@ function App(){
   const [showTop, setShowTop] = useSt(false);
 
   useEf(()=>{
-    const onScroll = () => setShowTop((window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0) > 250);
+    const onScroll = () => setShowTop((window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0) > 50);
     window.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener('scroll', onScroll);
@@ -406,9 +406,23 @@ function App(){
       <div id="toast" className="toast"/>
 
       <button type="button" aria-label="回到頂部" title="回到頂部"
-        className={'scroll-to-top'+(showTop?' show':'')}
-        onClick={()=>window.scrollTo({ top:0, behavior:'smooth' })}>
-        <Icon name="arrowUp" size={18}/>
+        onClick={()=>window.scrollTo({ top:0, behavior:'smooth' })}
+        style={{
+          position:'fixed',
+          right:16,
+          bottom: 'calc(90px + env(safe-area-inset-bottom, 0px))',
+          width:48, height:48, borderRadius:'50%',
+          background:'var(--clay)', color:'#fff', border:'none',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          boxShadow:'0 6px 16px rgba(0,0,0,0.32)',
+          zIndex:9999,
+          cursor:'pointer',
+          opacity: showTop?1:0,
+          pointerEvents: showTop?'auto':'none',
+          transform: showTop?'translateY(0)':'translateY(8px)',
+          transition:'opacity 0.2s ease, transform 0.2s ease'
+        }}>
+        <Icon name="arrowUp" size={20}/>
       </button>
     </>
   );
