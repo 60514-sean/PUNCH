@@ -136,7 +136,7 @@ function App(){
     document.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('touchmove', onScroll, { passive: true });
     window.addEventListener('wheel', onScroll, { passive: true });
-    const interval = setInterval(onScroll, 500);
+    const interval = setInterval(onScroll, 200);
     onScroll();
     return () => {
       window.removeEventListener('scroll', onScroll);
