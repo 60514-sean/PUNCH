@@ -533,8 +533,8 @@ const InventoryView = ({ state, setState }) => {
                     <div className="text-row-actions">
                       {s.note && <button type="button" title="檢視備註" onClick={(e)=>{e.stopPropagation();setNoteView(s);}}
                         style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', padding:2, border:'none', background:'none', cursor:'pointer', color:'var(--ink-mute)', borderRadius:4 }}><Icon name="note" size={13}/></button>}
-                      <button className="btn btn-ghost btn-sm" style={{ padding:'4px 8px', fontSize:12 }} onClick={()=>openAdj(s)}>進出貨</button>
-                      <button className="btn btn-ghost btn-sm" style={{ padding:'4px 8px', fontSize:12 }} onClick={()=>openEdit(s)}><Icon name="edit" size={11}/></button>
+                      <button className="btn btn-ghost btn-sm" title="進出貨" style={{ padding:'4px 8px', fontSize:12 }} onClick={()=>openAdj(s)}><Icon name="transfer" size={11}/></button>
+                      <button className="btn btn-ghost btn-sm" title="編輯" style={{ padding:'4px 8px', fontSize:12 }} onClick={()=>openEdit(s)}><Icon name="edit" size={11}/></button>
                     </div>
                   </div>
                 );
