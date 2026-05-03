@@ -2,8 +2,9 @@
 
 const Modal = ({ open, onClose, title, children, footer, width }) => {
   if (!open) return null;
+  // 點黑色背景不會關閉，避免編輯中誤觸；只能按右上 × 或 footer 內的取消按鈕
   return (
-    <div className="modal-overlay open" onClick={(e)=>{ if(e.target===e.currentTarget) onClose(); }}>
+    <div className="modal-overlay open">
       <div className="modal" style={{ width: width||undefined }}>
         <div className="modal-head">
           <div className="h2">{title}</div>
