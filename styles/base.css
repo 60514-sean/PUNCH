@@ -206,6 +206,23 @@ input, select, textarea { font-family: inherit; color: inherit; }
   cursor: pointer;
 }
 
+/* ═══ Scroll-to-top 浮動按鈕 ═══ */
+.scroll-to-top {
+  position: fixed; right: 16px; bottom: 24px;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--clay); color: #fff; border: none;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.22); z-index: 80;
+  cursor: pointer; opacity: 0; pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.scroll-to-top.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.scroll-to-top:hover { filter: brightness(1.05); }
+@media (max-width: 900px) {
+  .scroll-to-top { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); right: 14px; width: 42px; height: 42px; }
+}
+
 /* ═══ Stock Grid (一列 4 個，手機降為 2 個) ═══ */
 .stock-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 900px) { .stock-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }

@@ -127,6 +127,14 @@ function App(){
   const [orderModalFlag, setOrderModalFlag] = useSt(false);
   const [tweaks, setTweaks] = useSt(TWEAK_DEFAULTS);
   const [tweakOpen, setTweakOpen] = useSt(false);
+  const [showTop, setShowTop] = useSt(false);
+
+  useEf(()=>{
+    const onScroll = () => setShowTop((window.scrollY || document.documentElement.scrollTop) > 400);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   useEf(()=>{
     const handler = (e) => {
@@ -396,6 +404,12 @@ function App(){
       )}
 
       <div id="toast" className="toast"/>
+
+      <button type="button" aria-label="回到頂部" title="回到頂部"
+        className={'scroll-to-top'+(showTop?' show':'')}
+        onClick={()=>window.scrollTo({ top:0, behavior:'smooth' })}>
+        <Icon name="arrowUp" size={18}/>
+      </button>
     </>
   );
 }
