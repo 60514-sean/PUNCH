@@ -2,15 +2,19 @@
 const { useState: useStateP, useMemo: useMemoP } = React;
 
 const ProductsView = ({ state, setState }) => {
-  const [tab, setTab] = useStateP('saved'); // saved | calc
+  const [tab, setTab] = useStateP('saved'); // saved | costs
   const [viewMode, setViewMode] = useStateP('grid'); // list | grid
   const [q, setQ] = useStateP('');
   const [modalOpen, setModalOpen] = useStateP(false);
   const [editingId, setEditingId] = useStateP(null);
   const [form, setForm] = useStateP(emptyP());
-  const [calc, setCalc] = useStateP({ direct:'', indirect:'', gross:30, net:15, custom:'' });
+  // 成本控管 modal
+  const [costModalOpen, setCostModalOpen] = useStateP(false);
+  const [costEditingId, setCostEditingId] = useStateP(null);
+  const [costForm, setCostForm] = useStateP(emptyCost());
 
   function emptyP(){ return { id:'', name:'', spec:'', direct:0, indirect:0, directItems:[], indirectItems:[], price:'', minPrice:'' }; }
+  function emptyCost(){ return { id:'', kind:'direct', name:'', unit:'', price:'' }; }
 
   // 升級舊版明細（只有 n + a）→ 新版（n + unit_q[量詞文字] + unit_p + qty + a）
   // 邏輯：舊資料的 a 視為 unit_p，unit_q 是量詞文字（個/條/包），qty 預設 1
@@ -55,19 +59,19 @@ const ProductsView = ({ state, setState }) => {
     })
   }));
 
-  // 名稱輸入時若完整匹配庫存品項名稱，自動帶入該品項的「單位（量詞）」與「單價」，並重算小計
+  // 名稱輸入時若完整匹配「成本控管」中該分類的成本項目，自動帶入單位與單價並重算小計
   const pickStockForItem = (kind, i, name) => setForm(f => ({
     ...f,
     [kind+'Items']: (f[kind+'Items']||[]).map((x,idx) => {
       if (idx !== i) return x;
       const trimmed = (name || '').trim();
-      const stock = state.stocks.find(s => !s._deleted && s.name === trimmed);
-      if (stock) {
+      const cost = (state.productCosts || []).find(c => !c._deleted && c.kind === kind && c.name === trimmed);
+      if (cost) {
         const updated = {
           ...x,
           n: name,
-          unit_q: stock.unit || x.unit_q || '',
-          unit_p: Number(stock.price) || 0, // 一律覆寫成庫存單價
+          unit_q: cost.unit || x.unit_q || '',
+          unit_p: Number(cost.price) || 0, // 一律覆寫成成本單價
         };
         updated.a = recalcA(updated);
         return updated;
@@ -75,6 +79,26 @@ const ProductsView = ({ state, setState }) => {
       return { ...x, n: name };
     })
   }));
+
+  // ─── 成本控管 CRUD ───
+  const openNewCost = () => { setCostForm(emptyCost()); setCostEditingId(null); setCostModalOpen(true); };
+  const openEditCost = (c) => { setCostForm({...c}); setCostEditingId(c.id); setCostModalOpen(true); };
+  const saveCost = () => {
+    if (!costForm.name) { toast('請填寫成本名稱'); return; }
+    const rec = { ...costForm, price: Number(costForm.price) || 0 };
+    if (costEditingId) {
+      setState(s => ({ ...s, productCosts: (s.productCosts || []).map(x => x.id === costEditingId ? rec : x) }));
+    } else {
+      setState(s => ({ ...s, productCosts: [{ ...rec, id: uid() }, ...(s.productCosts || [])] }));
+    }
+    toast(costEditingId ? '已更新' : '已新增');
+    setCostModalOpen(false);
+  };
+  const delCost = () => {
+    if (!confirm('刪除此成本？將移至回收桶（保留 10 天）。')) return;
+    setState(s => window.softDel(s, 'productCosts', costEditingId));
+    setCostModalOpen(false); toast('已移至回收桶');
+  };
 
   const delItem = (kind, i) => setForm(f => ({ ...f, [kind+'Items']: (f[kind+'Items']||[]).filter((_,idx)=>idx!==i) }));
 
@@ -97,15 +121,6 @@ const ProductsView = ({ state, setState }) => {
     return { grossAvg:Math.round(gross), netAvg:Math.round(net), count:ps.length };
   }, [state.products]);
 
-  // live calc
-  const d = Number(calc.direct)||0, ind = Number(calc.indirect)||0;
-  const total = d + ind;
-  const grossPrice = calc.gross ? Math.round(d / (1 - calc.gross/100)) : 0;
-  const netPrice = calc.net ? Math.round(total / (1 - calc.net/100)) : 0;
-  const cp = Number(calc.custom)||0;
-  const cGross = cp ? Math.round((cp-d)/cp*1000)/10 : 0;
-  const cNet = cp ? Math.round((cp-total)/cp*1000)/10 : 0;
-
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
       <div className="topbar">
@@ -115,22 +130,29 @@ const ProductsView = ({ state, setState }) => {
           <div className="sub">{stats.count} 項產品 · 平均毛利 {stats.grossAvg}% / 淨利 {stats.netAvg}%</div>
         </div>
         <div className="topbar-r">
-          {tab==='saved' && <button className="btn btn-primary" onClick={openNew}><Icon name="plus" size={14}/> 新增產品</button>}
+          {tab==='saved' && <button className="btn btn-ghost btn-sm" onClick={openNewCost}><Icon name="plus" size={14}/> 新增成本</button>}
+          {tab==='saved' && <button className="btn btn-primary btn-sm" onClick={openNew}><Icon name="plus" size={14}/> 新增產品</button>}
+          {tab==='costs' && <button className="btn btn-primary btn-sm" onClick={openNewCost}><Icon name="plus" size={14}/> 新增成本</button>}
         </div>
       </div>
 
       <div style={{ display:'flex', gap:6, flexWrap:'nowrap', alignItems:'center' }}>
         <div style={{ position:'relative', flex:'1 1 0', minWidth:60 }}>
           <Icon name="search" size={13} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--ink-mute)' }}/>
-          <input className="input has-leading-icon" placeholder="搜尋產品…" value={q} onChange={e=>setQ(e.target.value)}
+          <input className="input has-leading-icon" placeholder={tab==='saved'?'搜尋產品…':'搜尋成本…'} value={q} onChange={e=>setQ(e.target.value)}
             style={{ padding:'6px 11px 6px 30px', fontSize:13, borderRadius:7, width:'100%' }}/>
         </div>
-        <div style={{ flexShrink:0 }}>
-          <Segmented options={[{value:'saved',label:'已儲存產品'},{value:'calc',label:'快速試算'}]} value={tab} onChange={setTab}/>
-        </div>
-        <div style={{ flexShrink:0 }}>
-          <Segmented options={[{value:'list',label:'列表'},{value:'grid',label:'網格'}]} value={viewMode} onChange={setViewMode}/>
-        </div>
+        <select className="select" value={tab} onChange={e=>setTab(e.target.value)}
+                style={{ flexShrink:0, width:115, padding:'7px 26px 7px 10px', fontSize:13 }}>
+          <option value="saved">儲存產品</option>
+          <option value="costs">物料成本</option>
+        </select>
+        <select className="select" value={viewMode} onChange={e=>setViewMode(e.target.value)}
+                style={{ flexShrink:0, width:90, padding:'7px 26px 7px 10px', fontSize:13 }}>
+          <option value="list">列表</option>
+          <option value="grid">網格</option>
+          <option value="text">文字</option>
+        </select>
       </div>
 
       {tab==='saved' && (() => {
@@ -138,7 +160,6 @@ const ProductsView = ({ state, setState }) => {
           !p._deleted && (!q || p.name.includes(q) || (p.spec||'').includes(q)));
         return (
         <div className="card">
-          <div className="card-head"><div className="card-title">已儲存產品</div><div className="card-subtle">點選卡片檢視／編輯</div></div>
           {viewMode === 'grid' && (
             <div className="stock-grid">
               {filtered.map(p => {
@@ -201,55 +222,106 @@ const ProductsView = ({ state, setState }) => {
               })}
             </div>
           )}
+          {viewMode === 'text' && (
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              {[...filtered].sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant',{ numeric:true, sensitivity:'base' })).map(p => {
+                const tc = p.direct + p.indirect;
+                const gross = p.price ? Math.round((p.price-p.direct)/p.price*100) : 0;
+                const net = p.price ? Math.round((p.price-tc)/p.price*100) : 0;
+                return (
+                  <div key={p.id} className="text-row">
+                    <div className="text-row-info">
+                      <span style={{ fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
+                      {p.spec && <span style={{ fontSize:11, color:'var(--ink-mute)' }}>{p.spec}</span>}
+                      <span className="mono" style={{ fontSize:11, color:'var(--ink-mute)' }}>成本 {fmtMoney(tc)}</span>
+                      <span className="mono" style={{ color:'var(--clay)', fontWeight:700, fontSize:14 }}>{fmtMoney(p.price)}</span>
+                      <span style={{ fontSize:11, color:'var(--ink-mute)' }}>
+                        毛 <strong className="mono" style={{ color:'var(--sage)' }}>{gross}%</strong>
+                        {' / 淨 '}<strong className="mono" style={{ color:'var(--clay)' }}>{net}%</strong>
+                      </span>
+                    </div>
+                    <div className="text-row-actions">
+                      <button className="btn btn-ghost btn-sm" title="編輯" style={{ padding:'4px 8px', fontSize:12 }} onClick={()=>openEdit(p)}><Icon name="edit" size={11}/></button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {filtered.length===0 && <EmptyState icon="product" title={q?'查無符合產品':'尚無產品'}/>}
         </div>
         );
       })()}
 
-      {tab==='calc' && (
-        <div className="card">
-          <div className="card-head"><div className="card-title">快速試算</div><div className="card-subtle">不儲存，僅供估算</div></div>
-          <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-            <div className="row">
-              <div className="field"><label>直接成本</label><input className="input mono" type="number" value={calc.direct} onChange={e=>setCalc({...calc,direct:e.target.value})} placeholder="0"/></div>
-              <div className="field"><label>間接成本</label><input className="input mono" type="number" value={calc.indirect} onChange={e=>setCalc({...calc,indirect:e.target.value})} placeholder="0"/></div>
-            </div>
-            <div className="row">
-              <div className="field"><label>目標毛利率 %</label><input className="input mono" type="number" value={calc.gross} onChange={e=>setCalc({...calc,gross:e.target.value})}/></div>
-              <div className="field"><label>目標淨利率 %</label><input className="input mono" type="number" value={calc.net} onChange={e=>setCalc({...calc,net:e.target.value})}/></div>
-            </div>
+      {tab==='costs' && (() => {
+        const allCosts = (state.productCosts || []).filter(c => !c._deleted);
+        const filteredCosts = allCosts.filter(c => !q || c.name.includes(q) || (c.unit||'').includes(q));
+        const directCosts = filteredCosts.filter(c => c.kind === 'direct');
+        const indirectCosts = filteredCosts.filter(c => c.kind === 'indirect');
 
-            <div style={{ background:'var(--clay-tint)', borderRadius:8, padding:14 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid var(--paper-deep)' }}>
-                <span style={{ fontSize:14, color:'var(--ink-soft)' }}>總成本</span>
-                <span className="mono" style={{ fontWeight:700, fontSize:15 }}>{fmtMoney(total)}</span>
-              </div>
-              <div style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid var(--paper-deep)' }}>
-                <span style={{ fontSize:14, color:'var(--ink-soft)' }}>毛利建議售價</span>
-                <span className="mono" style={{ fontWeight:700, fontSize:15, color:'var(--moss)' }}>{fmtMoney(grossPrice)}</span>
-              </div>
-              <div style={{ display:'flex', justifyContent:'space-between', padding:'8px 0' }}>
-                <span style={{ fontSize:14, color:'var(--ink-soft)' }}>淨利建議售價</span>
-                <span className="mono" style={{ fontWeight:700, fontSize:15, color:'var(--clay)' }}>{fmtMoney(netPrice)}</span>
-              </div>
+        const renderListRow = (c) => (
+          <div key={c.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', border:'1px solid var(--rule-soft)', borderRadius:8, cursor:'pointer' }}
+               onClick={()=>openEditCost(c)}>
+            <div style={{ flex:'1 1 0', minWidth:0 }}>
+              <div style={{ fontSize:14, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.name}</div>
+              {c.unit && <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>單位 {c.unit}</div>}
             </div>
-
-            <hr className="hr-dashed"/>
-
-            <div className="field">
-              <label>自訂售價</label>
-              <input className="input mono" type="number" value={calc.custom} onChange={e=>setCalc({...calc,custom:e.target.value})} placeholder="輸入檢查利潤"/>
+            <div className="mono" style={{ flexShrink:0, textAlign:'right' }}>
+              <div className="eyebrow">單價</div>
+              <div style={{ fontSize:15, fontWeight:700, color:'var(--clay)' }}>{fmtMoney(c.price)}</div>
             </div>
-            {cp>0 && (
-              <div style={{ padding:'12px 14px', background:'var(--paper-deep)', borderRadius:8, display:'flex', justifyContent:'space-between', fontSize:14 }}>
-                <span><span className="muted">毛利率 </span><strong className="mono">{cGross}%</strong></span>
-                <span><span className="muted">淨利率 </span><strong className="mono" style={{ color: cNet>=20?'var(--moss)':cNet>=10?'var(--ochre)':'var(--terracotta)' }}>{cNet}%</strong></span>
-                <span><span className="muted">淨利 </span><strong className="mono">{fmtMoney(cp-total)}</strong></span>
-              </div>
-            )}
           </div>
-        </div>
-      )}
+        );
+
+        const renderGridCard = (c) => (
+          <div key={c.id} style={{ border:'1px solid var(--rule-soft)', borderRadius:10, padding:12, cursor:'pointer', background:'var(--paper-soft)', display:'flex', flexDirection:'column', gap:6 }}
+               onClick={()=>openEditCost(c)}>
+            <div style={{ fontSize:13, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.name}</div>
+            <div className="mono" style={{ display:'flex', alignItems:'baseline', gap:4 }}>
+              <span style={{ fontSize:16, fontWeight:700, color:'var(--clay)' }}>{fmtMoney(c.price)}</span>
+              {c.unit && <span style={{ fontSize:11, color:'var(--ink-mute)' }}>/ {c.unit}</span>}
+            </div>
+          </div>
+        );
+
+        const renderTextRow = (c) => (
+          <div key={c.id} className="text-row" style={{ cursor:'pointer' }} onClick={()=>openEditCost(c)}>
+            <div className="text-row-info">
+              <span style={{ fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.name}</span>
+              {c.unit && <span style={{ fontSize:11, color:'var(--ink-mute)' }}>單位 {c.unit}</span>}
+              <span className="mono" style={{ color:'var(--clay)', fontWeight:700, fontSize:14 }}>{fmtMoney(c.price)}</span>
+            </div>
+            <div className="text-row-actions">
+              <button className="btn btn-ghost btn-sm" title="編輯" style={{ padding:'4px 8px', fontSize:12 }} onClick={(e)=>{e.stopPropagation();openEditCost(c);}}><Icon name="edit" size={11}/></button>
+            </div>
+          </div>
+        );
+
+        const renderSection = (costs, emptyMsg) => {
+          if (costs.length === 0) return <div style={{ fontSize:11, color:'var(--ink-faint)', padding:'6px 0' }}>{emptyMsg}</div>;
+          if (viewMode === 'grid') return <div className="stock-grid">{costs.map(renderGridCard)}</div>;
+          if (viewMode === 'text') return <div style={{ display:'flex', flexDirection:'column', gap:6 }}>{[...costs].sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant',{ numeric:true, sensitivity:'base' })).map(renderTextRow)}</div>;
+          return <div style={{ display:'flex', flexDirection:'column', gap:6 }}>{costs.map(renderListRow)}</div>;
+        };
+
+        return (
+          <div className="card">
+            <div style={{ marginBottom:18 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'var(--ink-soft)', marginBottom:8, display:'flex', alignItems:'center', gap:6 }}>
+                直接成本（原料、燃料） <span style={{ fontWeight:400, color:'var(--ink-mute)' }}>共 {directCosts.length} 項</span>
+              </div>
+              {renderSection(directCosts, '尚未新增任何直接成本')}
+            </div>
+            <div>
+              <div style={{ fontSize:12, fontWeight:700, color:'var(--ink-soft)', marginBottom:8, display:'flex', alignItems:'center', gap:6 }}>
+                間接成本（人工、包材） <span style={{ fontWeight:400, color:'var(--ink-mute)' }}>共 {indirectCosts.length} 項</span>
+              </div>
+              {renderSection(indirectCosts, '尚未新增任何間接成本')}
+            </div>
+            {allCosts.length===0 && <EmptyState icon="product" title="尚無成本項目" hint="點上方「新增成本」開始建立"/>}
+          </div>
+        );
+      })()}
 
       <Modal open={modalOpen} onClose={()=>setModalOpen(false)} title={editingId?'編輯產品':'新增產品'}
         footer={<>
@@ -259,15 +331,15 @@ const ProductsView = ({ state, setState }) => {
           <button className="btn btn-primary" onClick={save}>儲存</button>
         </>}>
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-          {/* 直接成本：只顯示「材料」；間接成本：只顯示「包材」 */}
+          {/* 來源由「庫存管理」改為「成本控管」：依 cost.kind 過濾 */}
           <datalist id="products-stock-direct">
-            {state.stocks.filter(s=>!s._deleted && s.kind==='material').map(s=>(
-              <option key={s.id} value={s.name}/>
+            {(state.productCosts || []).filter(c=>!c._deleted && c.kind==='direct').map(c=>(
+              <option key={c.id} value={c.name}/>
             ))}
           </datalist>
           <datalist id="products-stock-indirect">
-            {state.stocks.filter(s=>!s._deleted && s.kind==='packaging').map(s=>(
-              <option key={s.id} value={s.name}/>
+            {(state.productCosts || []).filter(c=>!c._deleted && c.kind==='indirect').map(c=>(
+              <option key={c.id} value={c.name}/>
             ))}
           </datalist>
           <div className="field"><label>產品名稱<span className="req">*</span></label><input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></div>
@@ -356,6 +428,35 @@ const ProductsView = ({ state, setState }) => {
               <div style={{ textAlign:'right' }}><span className="muted">淨利 </span><strong className="mono" style={{ color:'var(--clay)', fontWeight:700 }}>{fmtMoney(form.price-directEff-indirectEff)} ({Math.round((form.price-directEff-indirectEff)/form.price*100)}%)</strong></div>
             </div>
           )}
+        </div>
+      </Modal>
+
+      {/* 成本項目 新增/編輯 Modal */}
+      <Modal open={costModalOpen} onClose={()=>setCostModalOpen(false)} title={costEditingId?'編輯成本':'新增成本'}
+        footer={<>
+          {costEditingId && <button className="btn btn-danger" onClick={delCost}><Icon name="trash" size={13}/> 刪除</button>}
+          <div style={{ flex:1 }}/>
+          <button className="btn btn-ghost" onClick={()=>setCostModalOpen(false)}>取消</button>
+          <button className="btn btn-primary" onClick={saveCost}>儲存</button>
+        </>}>
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          <div className="field"><label>分類</label>
+            <select className="select" value={costForm.kind} onChange={e=>setCostForm({...costForm, kind:e.target.value})}>
+              <option value="direct">直接成本（原料、燃料）</option>
+              <option value="indirect">間接成本（人工、包材）</option>
+            </select>
+          </div>
+          <div className="field"><label>名稱<span className="req">*</span></label>
+            <input className="input" value={costForm.name} onChange={e=>setCostForm({...costForm, name:e.target.value})} placeholder="例：玫瑰精油 / 包裝人工"/>
+          </div>
+          <div className="row-keep">
+            <div className="field"><label>單位（量詞）</label>
+              <input className="input" type="text" placeholder="個 / 條 / 包 / 小時" value={costForm.unit} onChange={e=>setCostForm({...costForm, unit:e.target.value})}/>
+            </div>
+            <div className="field"><label>單價</label>
+              <input className="input mono" type="number" value={costForm.price} onChange={e=>setCostForm({...costForm, price:e.target.value})}/>
+            </div>
+          </div>
         </div>
       </Modal>
 

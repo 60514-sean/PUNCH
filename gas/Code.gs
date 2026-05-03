@@ -5,7 +5,7 @@
 // 各 collection 對應的分頁名稱（每個 array of objects with id 一個分頁）
 const COLL_SHEETS = [
   'orders', 'finances', 'stocks', 'products', 'customers',
-  'quotes', 'channels', 'tasks', 'logs', 'monthMethods'
+  'quotes', 'channels', 'tasks', 'logs', 'monthMethods', 'productCosts'
 ];
 // 非陣列的 state 鍵值（goals, weekPlan）統一放這個 meta 分頁
 const META_SHEET = '_meta';
