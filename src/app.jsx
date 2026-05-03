@@ -421,9 +421,9 @@ function App(){
           boxShadow:'0 6px 16px rgba(0,0,0,0.32)',
           zIndex:9999,
           cursor:'pointer',
-          opacity: 1,
-          pointerEvents: 'auto',
-          transform: 'translateY(0)',
+          opacity: showTop?1:0,
+          pointerEvents: showTop?'auto':'none',
+          transform: showTop?'translateY(0)':'translateY(8px)',
           transition:'opacity 0.2s ease, transform 0.2s ease'
         }}>
         <Icon name="arrowUp" size={20}/>
