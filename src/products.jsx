@@ -175,8 +175,8 @@ const ProductsView = ({ state, setState }) => {
                       <div className="mono" style={{ fontSize:17, fontWeight:700, color:'var(--clay)', flexShrink:0, marginLeft:8 }}>{fmtMoney(p.price)}</div>
                     </div>
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, padding:'10px 0 8px', borderTop:'1px dashed var(--rule-soft)' }}>
-                      <div><div className="eyebrow">總成本</div><div className="mono" style={{ fontSize:14, fontWeight:700 }}>{fmtMoney(tc)}</div></div>
-                      <div style={{ textAlign:'right' }}><div className="eyebrow">淨利</div><div className="mono" style={{ fontSize:14, fontWeight:700, color:net>=20?'var(--moss)':'var(--terracotta)' }}>{fmtMoney(p.price-tc)}</div></div>
+                      <div><div className="eyebrow">總成本</div><div className="mono" style={{ fontSize:14, fontWeight:700 }}>{fmtMoney(Math.round(tc))}</div></div>
+                      <div style={{ textAlign:'right' }}><div className="eyebrow">淨利</div><div className="mono" style={{ fontSize:14, fontWeight:700, color:net>=20?'var(--moss)':'var(--terracotta)' }}>{fmtMoney(Math.round(p.price-tc))}</div></div>
                     </div>
                     <div style={{ display:'flex', gap:12, fontSize:13, flexWrap:'wrap' }}>
                       <span><span className="muted">毛利 </span><strong className="mono" style={{ color:'var(--sage)' }}>{gross}%</strong></span>
@@ -202,7 +202,7 @@ const ProductsView = ({ state, setState }) => {
                     </div>
                     <div className="mono" style={{ flexShrink:0, textAlign:'right', minWidth:60 }}>
                       <div className="eyebrow">總成本</div>
-                      <div style={{ fontSize:13, fontWeight:600 }}>{fmtMoney(tc)}</div>
+                      <div style={{ fontSize:13, fontWeight:600 }}>{fmtMoney(Math.round(tc))}</div>
                     </div>
                     <div className="mono" style={{ flexShrink:0, textAlign:'right', minWidth:60 }}>
                       <div className="eyebrow">售價</div>
@@ -232,7 +232,7 @@ const ProductsView = ({ state, setState }) => {
                     <div className="text-row-info">
                       <span style={{ fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
                       {p.spec && <span style={{ fontSize:11, color:'var(--ink-mute)' }}>{p.spec}</span>}
-                      <span className="mono" style={{ fontSize:11, color:'var(--ink-mute)' }}>成本 {fmtMoney(tc)}</span>
+                      <span className="mono" style={{ fontSize:11, color:'var(--ink-mute)' }}>成本 {fmtMoney(Math.round(tc))}</span>
                       <span className="mono" style={{ color:'var(--clay)', fontWeight:700, fontSize:14 }}>{fmtMoney(p.price)}</span>
                       <span style={{ fontSize:11, color:'var(--ink-mute)' }}>
                         毛 <strong className="mono" style={{ color:'var(--sage)' }}>{gross}%</strong>
@@ -421,10 +421,10 @@ const ProductsView = ({ state, setState }) => {
           </div>
           {form.price>0 && (
             <div style={{ padding:12, background:'var(--clay-tint)', borderRadius:8, display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, fontSize:12 }}>
-              <div><span className="muted">總成本 </span><strong className="mono">{fmtMoney(directEff+indirectEff)}</strong></div>
+              <div><span className="muted">總成本 </span><strong className="mono">{fmtMoney(Math.round(directEff+indirectEff))}</strong></div>
               <div style={{ textAlign:'right' }}><span className="muted">售價 </span><strong className="mono">{fmtMoney(form.price)}</strong></div>
               <div><span className="muted">毛利 </span><strong className="mono" style={{ color:'var(--moss)' }}>{fmtMoney(form.price-directEff)} ({Math.round((form.price-directEff)/form.price*100)}%)</strong></div>
-              <div style={{ textAlign:'right' }}><span className="muted">淨利 </span><strong className="mono" style={{ color:'var(--clay)', fontWeight:700 }}>{fmtMoney(form.price-directEff-indirectEff)} ({Math.round((form.price-directEff-indirectEff)/form.price*100)}%)</strong></div>
+              <div style={{ textAlign:'right' }}><span className="muted">淨利 </span><strong className="mono" style={{ color:'var(--clay)', fontWeight:700 }}>{fmtMoney(Math.round(form.price-directEff-indirectEff))} ({Math.round((form.price-directEff-indirectEff)/form.price*100)}%)</strong></div>
             </div>
           )}
         </div>
