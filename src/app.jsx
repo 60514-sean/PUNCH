@@ -130,7 +130,7 @@ function App(){
   const [showTop, setShowTop] = useSt(false);
 
   useEf(()=>{
-    const onScroll = () => setShowTop((window.scrollY || document.documentElement.scrollTop) > 400);
+    const onScroll = () => setShowTop((window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0) > 250);
     window.addEventListener('scroll', onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener('scroll', onScroll);
