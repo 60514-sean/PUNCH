@@ -170,7 +170,7 @@ input, select, textarea { font-family: inherit; color: inherit; }
   border-radius: 7px;
   padding: 9px 11px;
   font-size: 16px; color: var(--ink);
-  transition: border-color 0.14s, background 0.14s;
+  transition: border-color 0.14s, background-color 0.14s;
   outline: none;
 }
 .input:focus, .select:focus, .textarea:focus { border-color: var(--clay); background: #fff; }
