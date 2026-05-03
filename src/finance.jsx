@@ -436,8 +436,8 @@ const InventoryView = ({ state, setState }) => {
                           {s.loc && <span style={{ fontSize:11, color:'var(--ink-mute)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>位置 {s.loc}</span>}
                         </div>
                         <div style={{ display:'flex', gap:4, flexShrink:0 }}>
-                          <button className="btn btn-ghost btn-sm" onClick={()=>openAdj(s)}>進出貨</button>
-                          <button className="btn btn-ghost btn-sm" onClick={()=>openEdit(s)}><Icon name="edit" size={12}/></button>
+                          <button className="btn btn-ghost btn-sm" title="進出貨" onClick={()=>openAdj(s)}><Icon name="transfer" size={12}/></button>
+                          <button className="btn btn-ghost btn-sm" title="編輯" onClick={()=>openEdit(s)}><Icon name="edit" size={12}/></button>
                         </div>
                       </div>
                     </td>
@@ -474,8 +474,8 @@ const InventoryView = ({ state, setState }) => {
                       style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', padding:6, border:'none', background:'none', cursor:'pointer', color:'var(--ink-mute)', borderRadius:4 }}><Icon name="note" size={15}/></button>}
                     {s.loc && <span style={{ fontSize:11, color:'var(--ink-mute)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', minWidth:0 }}>位置 {s.loc}</span>}
                     <div style={{ flex:1 }}/>
-                    <button className="btn btn-ghost btn-sm" onClick={(e)=>{e.stopPropagation();openAdj(s);}}>進出貨</button>
-                    <button className="btn btn-ghost btn-sm" onClick={(e)=>{e.stopPropagation();openEdit(s);}}><Icon name="edit" size={11}/></button>
+                    <button className="btn btn-ghost btn-sm" title="進出貨" onClick={(e)=>{e.stopPropagation();openAdj(s);}}><Icon name="transfer" size={11}/></button>
+                    <button className="btn btn-ghost btn-sm" title="編輯" onClick={(e)=>{e.stopPropagation();openEdit(s);}}><Icon name="edit" size={11}/></button>
                   </div>
                 </div>
               );
@@ -502,6 +502,11 @@ const InventoryView = ({ state, setState }) => {
                                  display:'inline-flex', alignItems:'center', justifyContent:'center',
                                  border:'none', background:'rgba(255,255,255,0.88)', cursor:'pointer',
                                  color:'var(--ink-soft)', borderRadius:'50%' }}><Icon name="note" size={13}/></button>}
+                      <button type="button" title="進出貨" onClick={(e)=>{e.stopPropagation();openAdj(s);}}
+                        style={{ position:'absolute', bottom:6, right:6, width:30, height:30, padding:0,
+                                 display:'inline-flex', alignItems:'center', justifyContent:'center',
+                                 border:'none', background:'rgba(255,255,255,0.92)', cursor:'pointer',
+                                 color:'var(--ink-soft)', borderRadius:'50%', boxShadow:'0 2px 6px rgba(0,0,0,0.12)' }}><Icon name="transfer" size={14}/></button>
                     </div>
                     <div style={{ minWidth:0 }}>
                       <div style={{ fontSize:13, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.name}</div>
