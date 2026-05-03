@@ -327,14 +327,14 @@ const InventoryView = ({ state, setState }) => {
       </div>
 
       {tab!=='logs' && (
-        <div style={{ display:'flex', gap:6, flexWrap:'nowrap', alignItems:'center' }}>
-          <div style={{ position:'relative', flex:'1 1 0', minWidth:0 }}>
+        <div style={{ display:'flex', gap:8, flexWrap:'nowrap', alignItems:'center' }}>
+          <div style={{ position:'relative', flex:'1 1 240px', minWidth:120, maxWidth:280 }}>
             <Icon name="search" size={13} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--ink-mute)' }}/>
             <input className="input has-leading-icon" placeholder="搜尋…" value={q} onChange={e=>setQ(e.target.value)}
               style={{ padding:'6px 11px 6px 30px', fontSize:13, borderRadius:7, width:'100%' }}/>
           </div>
           <select className="select" value={tab} onChange={e=>setTab(e.target.value)}
-                  style={{ flexShrink:0, minWidth:0, padding:'7px 24px 7px 10px', fontSize:13 }}>
+                  style={{ flexShrink:0, width:115, padding:'7px 26px 7px 10px', fontSize:13 }}>
             <option value="all">全部庫存</option>
             {KIND_OPTS.map(o => <option key={o.v} value={o.v}>{o.l}庫存</option>)}
           </select>
