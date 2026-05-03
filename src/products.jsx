@@ -3,12 +3,14 @@ const { useState: useStateP, useMemo: useMemoP } = React;
 
 const ProductsView = ({ state, setState }) => {
   const [tab, setTab] = useStateP('saved'); // saved | calc
+  const [viewMode, setViewMode] = useStateP('grid'); // list | grid
+  const [q, setQ] = useStateP('');
   const [modalOpen, setModalOpen] = useStateP(false);
   const [editingId, setEditingId] = useStateP(null);
   const [form, setForm] = useStateP(emptyP());
   const [calc, setCalc] = useStateP({ direct:'', indirect:'', gross:30, net:15, custom:'' });
 
-  function emptyP(){ return { id:'', name:'', cat:'', spec:'', direct:0, indirect:0, directItems:[], indirectItems:[], price:'', minPrice:'' }; }
+  function emptyP(){ return { id:'', name:'', spec:'', direct:0, indirect:0, directItems:[], indirectItems:[], price:'', minPrice:'' }; }
 
   const openNew = () => { setForm(emptyP()); setEditingId(null); setModalOpen(true); };
   const openEdit = (p) => { setForm({...p, directItems:[...(p.directItems||[])], indirectItems:[...(p.indirectItems||[])]}); setEditingId(p.id); setModalOpen(true); };
@@ -21,6 +23,17 @@ const ProductsView = ({ state, setState }) => {
 
   const addItem = (kind) => setForm(f => ({ ...f, [kind+'Items']: [...(f[kind+'Items']||[]), { n:'', a:0 }] }));
   const updItem = (kind, i, k, v) => setForm(f => ({ ...f, [kind+'Items']: (f[kind+'Items']||[]).map((x,idx)=>idx===i?{...x,[k]: k==='a'?(Number(v)||0):v}:x) }));
+  // 名稱輸入時若完整匹配庫存品項名稱，自動帶入該品項單價
+  const pickStockForItem = (kind, i, name) => setForm(f => ({
+    ...f,
+    [kind+'Items']: (f[kind+'Items']||[]).map((x,idx) => {
+      if (idx !== i) return x;
+      const stock = state.stocks.find(s => !s._deleted && s.name === name);
+      return (stock && stock.price != null)
+        ? { ...x, n: name, a: Number(stock.price) || 0 }
+        : { ...x, n: name };
+    })
+  }));
   const delItem = (kind, i) => setForm(f => ({ ...f, [kind+'Items']: (f[kind+'Items']||[]).filter((_,idx)=>idx!==i) }));
 
   const save = () => {
@@ -64,43 +77,92 @@ const ProductsView = ({ state, setState }) => {
         </div>
       </div>
 
-      <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
-        <Segmented options={[{value:'saved',label:'已儲存產品'},{value:'calc',label:'快速試算'}]} value={tab} onChange={setTab}/>
+      <div style={{ display:'flex', gap:8, flexWrap:'nowrap', alignItems:'center' }}>
+        <div style={{ position:'relative', flex:'1 1 240px', minWidth:120, maxWidth:280 }}>
+          <Icon name="search" size={13} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--ink-mute)' }}/>
+          <input className="input has-leading-icon" placeholder="搜尋產品…" value={q} onChange={e=>setQ(e.target.value)}
+            style={{ padding:'6px 11px 6px 30px', fontSize:13, borderRadius:7, width:'100%' }}/>
+        </div>
+        <div style={{ flexShrink:0 }}>
+          <Segmented options={[{value:'saved',label:'已儲存產品'},{value:'calc',label:'快速試算'}]} value={tab} onChange={setTab}/>
+        </div>
+        <div style={{ flexShrink:0 }}>
+          <Segmented options={[{value:'list',label:'列表'},{value:'grid',label:'網格'}]} value={viewMode} onChange={setViewMode}/>
+        </div>
       </div>
 
-      {tab==='saved' && (
+      {tab==='saved' && (() => {
+        const filtered = state.products.filter(p =>
+          !p._deleted && (!q || p.name.includes(q) || (p.spec||'').includes(q)));
+        return (
         <div className="card">
           <div className="card-head"><div className="card-title">已儲存產品</div><div className="card-subtle">點選卡片檢視／編輯</div></div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px,1fr))', gap:12 }}>
-            {state.products.filter(p=>!p._deleted).map(p => {
-              const tc = p.direct + p.indirect;
-              const gross = p.price ? Math.round((p.price-p.direct)/p.price*100) : 0;
-              const net = p.price ? Math.round((p.price-tc)/p.price*100) : 0;
-              return (
-                <div key={p.id} className="card flat" style={{ border:'1px solid var(--rule-soft)', padding:14, cursor:'pointer' }} onClick={()=>openEdit(p)}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
-                    <div>
-                      <div style={{ fontSize:15, fontWeight:700 }}>{p.name}</div>
-                      <div style={{ fontSize:13, color:'var(--ink-mute)' }}>{p.cat} · {p.spec}</div>
+          {viewMode === 'grid' && (
+            <div className="stock-grid">
+              {filtered.map(p => {
+                const tc = p.direct + p.indirect;
+                const gross = p.price ? Math.round((p.price-p.direct)/p.price*100) : 0;
+                const net = p.price ? Math.round((p.price-tc)/p.price*100) : 0;
+                return (
+                  <div key={p.id} className="card flat" style={{ border:'1px solid var(--rule-soft)', padding:14, cursor:'pointer' }} onClick={()=>openEdit(p)}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
+                      <div style={{ minWidth:0 }}>
+                        <div style={{ fontSize:15, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
+                        {p.spec && <div style={{ fontSize:13, color:'var(--ink-mute)' }}>{p.spec}</div>}
+                      </div>
+                      <div className="mono" style={{ fontSize:17, fontWeight:700, color:'var(--clay)', flexShrink:0, marginLeft:8 }}>{fmtMoney(p.price)}</div>
                     </div>
-                    <div className="mono" style={{ fontSize:17, fontWeight:700, color:'var(--clay)' }}>{fmtMoney(p.price)}</div>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, padding:'10px 0 8px', borderTop:'1px dashed var(--rule-soft)' }}>
+                      <div><div className="eyebrow">總成本</div><div className="mono" style={{ fontSize:14, fontWeight:700 }}>{fmtMoney(tc)}</div></div>
+                      <div style={{ textAlign:'right' }}><div className="eyebrow">淨利</div><div className="mono" style={{ fontSize:14, fontWeight:700, color:net>=20?'var(--moss)':'var(--terracotta)' }}>{fmtMoney(p.price-tc)}</div></div>
+                    </div>
+                    <div style={{ display:'flex', gap:12, fontSize:13, flexWrap:'wrap' }}>
+                      <span><span className="muted">毛利 </span><strong className="mono" style={{ color:'var(--sage)' }}>{gross}%</strong></span>
+                      <span><span className="muted">淨利 </span><strong className="mono" style={{ color:'var(--clay)' }}>{net}%</strong></span>
+                      {p.minPrice>0 && <span style={{ marginLeft:'auto' }} className="muted">底價 {fmtMoney(p.minPrice)}</span>}
+                    </div>
                   </div>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, padding:'10px 0 8px', borderTop:'1px dashed var(--rule-soft)' }}>
-                    <div><div className="eyebrow">總成本</div><div className="mono" style={{ fontSize:14, fontWeight:700 }}>{fmtMoney(tc)}</div></div>
-                    <div style={{ textAlign:'right' }}><div className="eyebrow">淨利</div><div className="mono" style={{ fontSize:14, fontWeight:700, color:net>=20?'var(--moss)':'var(--terracotta)' }}>{fmtMoney(p.price-tc)}</div></div>
+                );
+              })}
+            </div>
+          )}
+          {viewMode === 'list' && (
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {filtered.map(p => {
+                const tc = p.direct + p.indirect;
+                const gross = p.price ? Math.round((p.price-p.direct)/p.price*100) : 0;
+                const net = p.price ? Math.round((p.price-tc)/p.price*100) : 0;
+                return (
+                  <div key={p.id} style={{ border:'1px solid var(--rule-soft)', borderRadius:10, padding:'12px 14px', cursor:'pointer', display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }} onClick={()=>openEdit(p)}>
+                    <div style={{ flex:'1 1 160px', minWidth:0 }}>
+                      <div style={{ fontSize:14, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
+                      {p.spec && <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.spec}</div>}
+                    </div>
+                    <div className="mono" style={{ flexShrink:0, textAlign:'right', minWidth:60 }}>
+                      <div className="eyebrow">總成本</div>
+                      <div style={{ fontSize:13, fontWeight:600 }}>{fmtMoney(tc)}</div>
+                    </div>
+                    <div className="mono" style={{ flexShrink:0, textAlign:'right', minWidth:60 }}>
+                      <div className="eyebrow">售價</div>
+                      <div style={{ fontSize:15, fontWeight:700, color:'var(--clay)' }}>{fmtMoney(p.price)}</div>
+                    </div>
+                    <div className="mono" style={{ flexShrink:0, textAlign:'right', minWidth:90 }}>
+                      <div className="eyebrow">毛利 / 淨利</div>
+                      <div style={{ fontSize:12, fontWeight:700 }}>
+                        <span style={{ color:'var(--sage)' }}>{gross}%</span>
+                        <span style={{ color:'var(--ink-mute)', fontWeight:400 }}> / </span>
+                        <span style={{ color:'var(--clay)' }}>{net}%</span>
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ display:'flex', gap:12, fontSize:13 }}>
-                    <span><span className="muted">毛利 </span><strong className="mono" style={{ color:'var(--sage)' }}>{gross}%</strong></span>
-                    <span><span className="muted">淨利 </span><strong className="mono" style={{ color:'var(--clay)' }}>{net}%</strong></span>
-                    {p.minPrice>0 && <span style={{ marginLeft:'auto' }} className="muted">底價 {fmtMoney(p.minPrice)}</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {state.products.filter(p=>!p._deleted).length===0 && <EmptyState icon="product" title="尚無產品"/>}
+                );
+              })}
+            </div>
+          )}
+          {filtered.length===0 && <EmptyState icon="product" title={q?'查無符合產品':'尚無產品'}/>}
         </div>
-      )}
+        );
+      })()}
 
       {tab==='calc' && (
         <div className="card">
@@ -155,11 +217,13 @@ const ProductsView = ({ state, setState }) => {
           <button className="btn btn-primary" onClick={save}>儲存</button>
         </>}>
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          <datalist id="products-stock-items">
+            {state.stocks.filter(s=>!s._deleted).map(s=>(
+              <option key={s.id} value={s.name}/>
+            ))}
+          </datalist>
           <div className="field"><label>產品名稱<span className="req">*</span></label><input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></div>
-          <div className="row">
-            <div className="field"><label>分類</label><input className="input" value={form.cat} onChange={e=>setForm({...form,cat:e.target.value})}/></div>
-            <div className="field"><label>規格</label><input className="input" value={form.spec} onChange={e=>setForm({...form,spec:e.target.value})}/></div>
-          </div>
+          <div className="field"><label>規格</label><input className="input" value={form.spec} onChange={e=>setForm({...form,spec:e.target.value})}/></div>
           {/* Direct cost items */}
           <div style={{ padding:12, background:'var(--paper-deep)', borderRadius:8 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
@@ -168,7 +232,7 @@ const ProductsView = ({ state, setState }) => {
             </div>
             {(form.directItems||[]).map((it,i)=>(
               <div key={i} style={{ display:'grid', gridTemplateColumns:'1fr 110px 28px', gap:6, marginBottom:6 }}>
-                <input className="input" style={{ padding:'6px 9px', fontSize:12 }} placeholder="項目" value={it.n} onChange={e=>updItem('direct',i,'n',e.target.value)}/>
+                <input className="input" style={{ padding:'6px 9px', fontSize:12 }} placeholder="項目（可選庫存或自填）" value={it.n} list="products-stock-items" onChange={e=>pickStockForItem('direct',i,e.target.value)}/>
                 <input className="input mono" style={{ padding:'6px 9px', fontSize:12 }} type="number" placeholder="金額" value={it.a} onChange={e=>updItem('direct',i,'a',e.target.value)}/>
                 <button type="button" className="btn btn-ghost btn-sm" style={{ padding:'4px' }} onClick={()=>delItem('direct',i)}><Icon name="close" size={11}/></button>
               </div>
@@ -197,7 +261,7 @@ const ProductsView = ({ state, setState }) => {
             </div>
             {(form.indirectItems||[]).map((it,i)=>(
               <div key={i} style={{ display:'grid', gridTemplateColumns:'1fr 110px 28px', gap:6, marginBottom:6 }}>
-                <input className="input" style={{ padding:'6px 9px', fontSize:12 }} placeholder="項目" value={it.n} onChange={e=>updItem('indirect',i,'n',e.target.value)}/>
+                <input className="input" style={{ padding:'6px 9px', fontSize:12 }} placeholder="項目（可選庫存或自填）" value={it.n} list="products-stock-items" onChange={e=>pickStockForItem('indirect',i,e.target.value)}/>
                 <input className="input mono" style={{ padding:'6px 9px', fontSize:12 }} type="number" placeholder="金額" value={it.a} onChange={e=>updItem('indirect',i,'a',e.target.value)}/>
                 <button type="button" className="btn btn-ghost btn-sm" style={{ padding:'4px' }} onClick={()=>delItem('indirect',i)}><Icon name="close" size={11}/></button>
               </div>
@@ -218,7 +282,7 @@ const ProductsView = ({ state, setState }) => {
             </div>
           </div>
 
-          <div className="row">
+          <div className="row-keep">
             <div className="field"><label>售價<span className="req">*</span></label><input className="input mono" type="number" value={form.price} onChange={e=>setForm({...form,price:e.target.value})}/></div>
             <div className="field"><label>最低售價</label><input className="input mono" type="number" value={form.minPrice} onChange={e=>setForm({...form,minPrice:e.target.value})}/></div>
           </div>
