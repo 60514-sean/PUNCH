@@ -130,7 +130,6 @@ const ProductsView = ({ state, setState }) => {
           <div className="sub">{stats.count} 項產品 · 平均毛利 {stats.grossAvg}% / 淨利 {stats.netAvg}%</div>
         </div>
         <div className="topbar-r">
-          {tab==='saved' && <button className="btn btn-ghost btn-sm" onClick={openNewCost}><Icon name="plus" size={14}/> 新增成本</button>}
           {tab==='saved' && <button className="btn btn-primary btn-sm" onClick={openNew}><Icon name="plus" size={14}/> 新增產品</button>}
           {tab==='costs' && <button className="btn btn-primary btn-sm" onClick={openNewCost}><Icon name="plus" size={14}/> 新增成本</button>}
         </div>
