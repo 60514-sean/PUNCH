@@ -259,9 +259,9 @@ const ProductsView = ({ state, setState }) => {
           <button className="btn btn-primary" onClick={save}>儲存</button>
         </>}>
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-          {/* 直接成本：排除「包材」類；間接成本：只有「包材」類 */}
+          {/* 直接成本：只顯示「材料」；間接成本：只顯示「包材」 */}
           <datalist id="products-stock-direct">
-            {state.stocks.filter(s=>!s._deleted && s.kind!=='packaging').map(s=>(
+            {state.stocks.filter(s=>!s._deleted && s.kind==='material').map(s=>(
               <option key={s.id} value={s.name}/>
             ))}
           </datalist>
