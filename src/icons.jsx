@@ -59,12 +59,13 @@ const Icon = ({ name, size=18, style={}, className='' }) => {
 const fmtMoney = (n, compact=false) => {
   if (n==null || isNaN(n)) return '0';
   const neg = n < 0;
-  const abs = Math.abs(Math.round(n));
+  const abs = Math.abs(n);
   if (compact && abs >= 10000) {
     if (abs >= 100000000) return (neg?'-':'') + (abs/100000000).toFixed(1) + '億';
     if (abs >= 10000) return (neg?'-':'') + (abs/10000).toFixed(abs >= 100000 ? 0 : 1) + '萬';
   }
-  return (neg?'-':'') + abs.toLocaleString();
+  // 保留小數位（最多 10 位），整數不顯示小數點
+  return (neg?'-':'') + abs.toLocaleString('en-US', { maximumFractionDigits: 10 });
 };
 const fmtPct = n => (n==null || isNaN(n)) ? '--' : (n>0?'+':'') + Math.round(n*10)/10 + '%';
 const fmtDate = (s) => {
