@@ -115,6 +115,7 @@ function App(){
   });
   const [syncStatus, setSyncStatus] = useSt('idle'); // idle | syncing | ok | error
   const saveTimer = useRef(null);
+  const initialLoaded = useRef(false); // 防止初次 fetch 還沒完成就 push 空 state 蓋掉雲端
   const urlParams = new URLSearchParams(window.location.search);
   const forcedPage = urlParams.get('page');
   const embedded = window.self !== window.top;
@@ -166,7 +167,7 @@ function App(){
 
   // 啟動時從 GAS 載入最新資料
   useEf(()=>{
-    if (!GAS_URL) return;
+    if (!GAS_URL) { initialLoaded.current = true; return; }
     fetch(GAS_URL)
       .then(r => r.json())
       .then(res => {
@@ -176,13 +177,15 @@ function App(){
           localStorage.setItem('bangqi_state', JSON.stringify(merged));
         }
       })
-      .catch(()=>{});
+      .catch(()=>{})
+      .finally(()=> { initialLoaded.current = true; });
   }, []);
 
   // 狀態變更時存 localStorage + 防抖儲存 GAS
   useEf(()=>{
     localStorage.setItem('bangqi_state', JSON.stringify(state));
     if (!GAS_URL) return;
+    if (!initialLoaded.current) return; // 初次 fetch 未完成前不 push，避免覆蓋雲端
     clearTimeout(saveTimer.current);
     setSyncStatus('syncing');
     saveTimer.current = setTimeout(()=>{
