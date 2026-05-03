@@ -305,8 +305,13 @@ const InventoryView = ({ state, setState }) => {
   };
 
   const allStocks = state.stocks.filter(x => !x._deleted);
-  const items = allStocks.filter(x => (tab==='all' || tab==='logs' ? true : x.kind===tab) &&
-    (!q || x.name.includes(q) || (x.loc||'').includes(q)));
+  const items = allStocks.filter(x => {
+    const matchTab = (tab==='all' || tab==='logs') ? true
+                    : tab==='alert' ? (x.qty <= x.min)
+                    : x.kind === tab;
+    const matchQ = !q || x.name.includes(q) || (x.loc||'').includes(q);
+    return matchTab && matchQ;
+  });
   const alertCount = allStocks.filter(x=>x.qty<=x.min).length;
   const invValue = allStocks.reduce((a,b)=>a+b.qty*b.price,0);
 
@@ -336,6 +341,7 @@ const InventoryView = ({ state, setState }) => {
           <select className="select" value={tab} onChange={e=>setTab(e.target.value)}
                   style={{ flexShrink:0, width:115, padding:'7px 26px 7px 10px', fontSize:13 }}>
             <option value="all">全部庫存</option>
+            <option value="alert">警示庫存</option>
             {KIND_OPTS.map(o => <option key={o.v} value={o.v}>{o.l}庫存</option>)}
           </select>
           <select className="select" value={viewMode} onChange={e=>setViewMode(e.target.value)}
