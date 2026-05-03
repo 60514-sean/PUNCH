@@ -241,20 +241,28 @@ const FinanceView = ({ state, setState }) => {
 };
 
 // ═══ Inventory ═══
+const KIND_OPTS = [
+  { v:'goods',     l:'商品' },
+  { v:'material',  l:'材料' },
+  { v:'packaging', l:'包材' },
+  { v:'display',   l:'展品' },
+];
+const KIND_VALUES = KIND_OPTS.map(o => o.v);
 const InventoryView = ({ state, setState }) => {
-  const [tab, setTab] = useStateF('material'); // material | goods | logs
+  const [tab, setTab] = useStateF('all'); // all | goods | material | packaging | display | logs
   const [q, setQ] = useStateF('');
   const [modalOpen, setModalOpen] = useStateF(false);
   const [adjOpen, setAdjOpen] = useStateF(false);
   const [editingId, setEditingId] = useStateF(null);
-  const [form, setForm] = useStateF({ id:'', kind:'material', name:'', cat:'', unit:'', qty:'', min:'', price:'', photo:'', note:'', loc:'' });
+  const [form, setForm] = useStateF({ id:'', kind:'goods', name:'', cat:'', unit:'', qty:'', min:'', price:'', photo:'', note:'', loc:'' });
   const [adj, setAdj] = useStateF({ id:'', name:'', current:0, type:'add', qty:'', note:'' });
   const [noteView, setNoteView] = useStateF(null); // 點圖示要看的品項
   const [viewMode, setViewMode] = useStateF('list'); // list | grid
   const [photoView, setPhotoView] = useStateF(''); // 點縮圖放大要看的 URL
 
   const openNew = () => {
-    setForm({ id:'', kind: tab==='goods'?'goods':'material', name:'', cat:'', unit:'', qty:'', min:'', price:'', photo:'', note:'', loc:'' });
+    const defKind = KIND_VALUES.includes(tab) ? tab : 'goods';
+    setForm({ id:'', kind: defKind, name:'', cat:'', unit:'', qty:'', min:'', price:'', photo:'', note:'', loc:'' });
     setEditingId(null); setModalOpen(true);
   };
   const openEdit = (s) => { setForm({...s}); setEditingId(s.id); setModalOpen(true); };
@@ -297,8 +305,8 @@ const InventoryView = ({ state, setState }) => {
   };
 
   const allStocks = state.stocks.filter(x => !x._deleted);
-  const items = allStocks.filter(x => (tab==='goods' ? x.kind==='goods' : x.kind==='material') &&
-    (!q || x.name.includes(q) || (x.cat||'').includes(q)));
+  const items = allStocks.filter(x => (tab==='all' || tab==='logs' ? true : x.kind===tab) &&
+    (!q || x.name.includes(q) || (x.loc||'').includes(q)));
   const alertCount = allStocks.filter(x=>x.qty<=x.min).length;
   const invValue = allStocks.reduce((a,b)=>a+b.qty*b.price,0);
 
@@ -311,7 +319,7 @@ const InventoryView = ({ state, setState }) => {
           <div className="sub">總品項 {allStocks.length} 項 · 庫存價值 {fmtMoney(invValue,true)} · <span style={{ color: alertCount?'var(--terracotta)':'var(--moss)' }}>{alertCount} 項警示</span></div>
         </div>
         <div className="topbar-r">
-          <button className={'btn btn-sm '+(tab==='logs'?'btn-ink':'btn-ghost')} onClick={()=>setTab(tab==='logs'?'material':'logs')}>
+          <button className={'btn btn-sm '+(tab==='logs'?'btn-ink':'btn-ghost')} onClick={()=>setTab(tab==='logs'?'all':'logs')}>
             {tab==='logs'?'回到庫存':'進出貨紀錄'}
           </button>
           <button className="btn btn-primary btn-sm" onClick={openNew}><Icon name="plus" size={14}/> 新增品項</button>
@@ -319,14 +327,17 @@ const InventoryView = ({ state, setState }) => {
       </div>
 
       {tab!=='logs' && (
-        <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
-          <button className={'btn btn-sm '+(tab==='material'?'btn-ink':'btn-ghost')} onClick={()=>setTab('material')}>材料庫存</button>
-          <button className={'btn btn-sm '+(tab==='goods'?'btn-ink':'btn-ghost')} onClick={()=>setTab('goods')}>商品庫存</button>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
           <div style={{ position:'relative', flex:'1 1 200px', minWidth:200, maxWidth:320 }}>
             <Icon name="search" size={13} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--ink-mute)' }}/>
             <input className="input has-leading-icon" placeholder="搜尋…" value={q} onChange={e=>setQ(e.target.value)}
               style={{ padding:'6px 11px 6px 30px', fontSize:13, borderRadius:7 }}/>
           </div>
+          <select className="select" value={tab} onChange={e=>setTab(e.target.value)}
+                  style={{ minWidth:120, padding:'7px 28px 7px 11px', fontSize:13 }}>
+            <option value="all">全部庫存</option>
+            {KIND_OPTS.map(o => <option key={o.v} value={o.v}>{o.l}庫存</option>)}
+          </select>
           <Segmented options={[{value:'list',label:'列表'},{value:'grid',label:'網格'}]} value={viewMode} onChange={setViewMode}/>
         </div>
       )}
@@ -400,7 +411,7 @@ const InventoryView = ({ state, setState }) => {
                             {s.name}
                             {low && <Pill tone="terracotta" dot>低於底線</Pill>}
                           </div>
-                          <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>{[s.cat, '更新 '+fmtDateFull(s.updated)].filter(Boolean).join(' · ')}</div>
+                          <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>{[(KIND_OPTS.find(o=>o.v===s.kind)||{}).l, '更新 '+fmtDateFull(s.updated)].filter(Boolean).join(' · ')}</div>
                         </div>
                       </div>
                     </td>
@@ -443,7 +454,7 @@ const InventoryView = ({ state, setState }) => {
                         {s.name}
                         {low && <Pill tone="terracotta" dot>低於底線</Pill>}
                       </div>
-                      <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>{[s.cat, '更新 '+fmtDateFull(s.updated)].filter(Boolean).join(' · ')}</div>
+                      <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>{[(KIND_OPTS.find(o=>o.v===s.kind)||{}).l, '更新 '+fmtDateFull(s.updated)].filter(Boolean).join(' · ')}</div>
                       <div className="mono" style={{ marginTop:6, display:'flex', alignItems:'baseline', gap:6 }}>
                         <span style={{ fontSize:20, fontWeight:700, color: low?'var(--terracotta)':'var(--ink)' }}>{s.qty}</span>
                         <span style={{ fontSize:11, color:'var(--ink-mute)' }}>/ {s.min} {s.unit}</span>
@@ -467,7 +478,7 @@ const InventoryView = ({ state, setState }) => {
           </div>
           </>}
           {viewMode === 'grid' && (
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(170px, 1fr))', gap:12 }}>
+            <div className="stock-grid">
               {items.map(s => {
                 const low = s.qty <= s.min;
                 return (
@@ -516,23 +527,22 @@ const InventoryView = ({ state, setState }) => {
           <div className="field"><label>商品照片</label>
             <PhotoUpload value={form.photo} onChange={(url)=>setForm({...form, photo:url})} size={120}/>
           </div>
-          <div className="field"><label>類型</label>
-            <div style={{ display:'flex',gap:6 }}>
-              {[{v:'material',l:'材料'},{v:'goods',l:'商品'}].map(t=>(
-                <button key={t.v} className={'btn btn-sm '+(form.kind===t.v?'btn-ink':'btn-ghost')} style={{ flex:1 }} onClick={()=>setForm({...form, kind:t.v})}>{t.l}</button>
-              ))}
-            </div>
-          </div>
           <div className="field"><label>名稱<span className="req">*</span></label><input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></div>
           <div className="row">
-            <div className="field"><label>分類</label><input className="input" value={form.cat} onChange={e=>setForm({...form,cat:e.target.value})}/></div>
+            <div className="field"><label>分類</label>
+              <select className="select" value={form.kind} onChange={e=>setForm({...form, kind:e.target.value})}>
+                {KIND_OPTS.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+              </select>
+            </div>
             <div className="field"><label>單位</label><input className="input" value={form.unit} onChange={e=>setForm({...form,unit:e.target.value})}/></div>
           </div>
-          <div className="field"><label>倉儲位置</label><input className="input" value={form.loc} onChange={e=>setForm({...form,loc:e.target.value})} placeholder="例：A 區 - 架 2 / 倉庫 1F"/></div>
-          <div className="row-3">
+          <div className="row">
             <div className="field"><label>現有庫存</label><input className="input mono" type="number" value={form.qty} onChange={e=>setForm({...form,qty:e.target.value})}/></div>
             <div className="field"><label>安全底線</label><input className="input mono" type="number" value={form.min} onChange={e=>setForm({...form,min:e.target.value})}/></div>
-            <div className="field"><label>單價</label><input className="input mono" type="number" value={form.price} onChange={e=>setForm({...form,price:e.target.value})}/></div>
+          </div>
+          <div className="row">
+            <div className="field"><label>倉儲位置</label><input className="input" value={form.loc} onChange={e=>setForm({...form,loc:e.target.value})} placeholder="例：A 區 - 架 2"/></div>
+            <div className="field"><label>單價成本</label><input className="input mono" type="number" value={form.price} onChange={e=>setForm({...form,price:e.target.value})}/></div>
           </div>
           <div className="field"><label>備註</label>
             <textarea className="textarea" value={form.note} onChange={e=>setForm({...form,note:e.target.value})} placeholder="規格、廠商、注意事項…"/>
