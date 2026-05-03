@@ -130,10 +130,21 @@ function App(){
   const [showTop, setShowTop] = useSt(false);
 
   useEf(()=>{
-    const onScroll = () => setShowTop((window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0) > 5);
+    const getY = () => window.pageYOffset || window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    const onScroll = () => setShowTop(getY() > 5);
     window.addEventListener('scroll', onScroll, { passive: true });
+    document.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('touchmove', onScroll, { passive: true });
+    window.addEventListener('wheel', onScroll, { passive: true });
+    const interval = setInterval(onScroll, 500);
     onScroll();
-    return () => window.removeEventListener('scroll', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      document.removeEventListener('scroll', onScroll);
+      window.removeEventListener('touchmove', onScroll);
+      window.removeEventListener('wheel', onScroll);
+      clearInterval(interval);
+    };
   }, []);
 
   useEf(()=>{
