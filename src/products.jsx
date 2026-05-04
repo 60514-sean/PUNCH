@@ -469,6 +469,9 @@ const QuotesView = ({ state, setState }) => {
   const [qItem, setQItem] = useStateP({ name:'', spec:'', qty:1, price:0, cost:0 });
   const [previewOpen, setPreviewOpen] = useStateP(false);
   const [listOpen, setListOpen] = useStateP(false);
+  const [infoOpen, setInfoOpen] = useStateP(false);
+  const [itemsOpen, setItemsOpen] = useStateP(false);
+  const [totalOpen, setTotalOpen] = useStateP(false);
 
   function emptyQ(){
     const today = new Date().toISOString().slice(0,10);
@@ -476,10 +479,12 @@ const QuotesView = ({ state, setState }) => {
     try { saved = JSON.parse(localStorage.getItem('bangqi_myco') || '{}'); } catch(e){}
     return { id:'', num:'QT-'+today.replace(/-/g,''), date:today, valid:'',
       myco: saved.myco || '碰器有限公司',
+      myAddress: saved.myAddress || '台南市永康區忠生路一段100號',
+      myTaxId: saved.myTaxId || '94063787',
       myName: saved.myName || '康竣傑',
       myPhone: saved.myPhone || '0903-993-359',
       myEmail: saved.myEmail || 'sean605147@gmail.com',
-      client:'', cName:'', cPhone:'', cEmail:'',
+      client:'', cAddress:'', cName:'', cPhone:'', cEmail:'',
       note: saved.note || '付款方式：50% 訂金、50% 交貨。\n有效期限請以本單為準。',
       tax:5, items:[] };
   }
@@ -487,10 +492,11 @@ const QuotesView = ({ state, setState }) => {
   // When user edits 'my company' fields, persist
   React.useEffect(()=>{
     localStorage.setItem('bangqi_myco', JSON.stringify({
-      myco: current.myco, myName: current.myName,
-      myPhone: current.myPhone, myEmail: current.myEmail, note: current.note,
+      myco: current.myco, myAddress: current.myAddress, myTaxId: current.myTaxId,
+      myName: current.myName, myPhone: current.myPhone, myEmail: current.myEmail,
+      note: current.note,
     }));
-  }, [current.myco, current.myName, current.myPhone, current.myEmail, current.note]);
+  }, [current.myco, current.myAddress, current.myTaxId, current.myName, current.myPhone, current.myEmail, current.note]);
 
   // Auto-fill price/cost when product name matches
   const pickProduct = (name) => {
@@ -536,7 +542,6 @@ const QuotesView = ({ state, setState }) => {
         <div className="topbar-r">
           <button className="btn btn-ghost" onClick={()=>setListOpen(true)}>歷史報價</button>
           <button className="btn btn-ghost" onClick={newQuote}>新報價</button>
-          <button className="btn btn-ghost" onClick={()=>setPreviewOpen(true)}><Icon name="eye" size={14}/> 預覽</button>
           <button className="btn btn-primary" onClick={saveQuote}>儲存</button>
         </div>
       </div>
@@ -544,23 +549,38 @@ const QuotesView = ({ state, setState }) => {
       <div className="grid-2-1-p">
         <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
           <div className="card">
-            <div className="card-head"><div className="card-title">基本資訊</div></div>
-            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+            <div className="card-head" style={{ cursor:'pointer', userSelect:'none' }} onClick={()=>setInfoOpen(o=>!o)}>
+              <div className="card-title">基本資訊</div>
+              <div className="card-subtle" style={{ display:'flex', alignItems:'center', gap:6 }}>
+                {current.client ? <span style={{ color:'var(--ink-mute)' }}>{current.client}</span> : <span style={{ color:'var(--ink-mute)' }}>點擊展開填寫</span>}
+                <span style={{ display:'inline-block', transition:'transform .2s', transform: infoOpen?'rotate(90deg)':'rotate(0)' }}>▶</span>
+              </div>
+            </div>
+            <div style={{ display: infoOpen?'flex':'none', flexDirection:'column', gap:12, marginTop:12 }}>
+              {/* 報價單基本 */}
               <div className="row">
                 <div className="field"><label>報價單編號</label><input className="input mono" value={current.num} onChange={e=>setCurrent({...current,num:e.target.value})}/></div>
                 <div className="field"><label>報價日期</label><input className="input" type="date" value={current.date} onChange={e=>setCurrent({...current,date:e.target.value})}/></div>
               </div>
-              <div className="field"><label>我方公司</label><input className="input" value={current.myco} onChange={e=>setCurrent({...current,myco:e.target.value})}/></div>
+              <hr className="hr-soft"/>
+              {/* 本公司資訊 */}
+              <div className="row">
+                <div className="field"><label>我方公司</label><input className="input" value={current.myco} onChange={e=>setCurrent({...current,myco:e.target.value})}/></div>
+                <div className="field"><label>統一編號</label><input className="input mono" value={current.myTaxId||''} onChange={e=>setCurrent({...current,myTaxId:e.target.value})}/></div>
+              </div>
               <div className="row">
                 <div className="field"><label>姓名</label><input className="input" value={current.myName} onChange={e=>setCurrent({...current,myName:e.target.value})}/></div>
                 <div className="field"><label>電話</label><input className="input" value={current.myPhone} onChange={e=>setCurrent({...current,myPhone:e.target.value})}/></div>
               </div>
+              <div className="field"><label>我方地址</label><input className="input" value={current.myAddress||''} onChange={e=>setCurrent({...current,myAddress:e.target.value})}/></div>
               <div className="field"><label>Email</label><input className="input" value={current.myEmail} onChange={e=>setCurrent({...current,myEmail:e.target.value})}/></div>
               <hr className="hr-soft"/>
+              {/* 客戶資訊 */}
               <div className="field"><label>客戶名稱<span className="req">*</span></label>
                 <input className="input" list="quote-clients" value={current.client} onChange={e=>setCurrent({...current,client:e.target.value})}/>
-                <datalist id="quote-clients">{state.customers.map(c=><option key={c.id} value={c.name}/>)}</datalist>
+                <datalist id="quote-clients">{state.customers.filter(c=>!c._deleted).map(c=><option key={c.id} value={c.name}/>)}</datalist>
               </div>
+              <div className="field"><label>客戶地址</label><input className="input" value={current.cAddress||''} onChange={e=>setCurrent({...current,cAddress:e.target.value})}/></div>
               <div className="row">
                 <div className="field"><label>聯絡人</label><input className="input" value={current.cName} onChange={e=>setCurrent({...current,cName:e.target.value})}/></div>
                 <div className="field"><label>電話</label><input className="input" value={current.cPhone} onChange={e=>setCurrent({...current,cPhone:e.target.value})}/></div>
@@ -575,17 +595,37 @@ const QuotesView = ({ state, setState }) => {
           </div>
 
           <div className="card">
-            <div className="card-head"><div className="card-title">報價品項</div><div className="card-subtle">{current.items.length} 項</div></div>
+            <div className="card-head" style={{ cursor:'pointer', userSelect:'none' }} onClick={()=>setItemsOpen(o=>!o)}>
+              <div className="card-title">報價品項</div>
+              <div className="card-subtle" style={{ display:'flex', alignItems:'center', gap:6 }}>
+                <span style={{ color:'var(--ink-mute)' }}>{current.items.length} 項{current.items.length?` · 小計 ${fmtMoney(subtotal)}`:''}</span>
+                <span style={{ display:'inline-block', transition:'transform .2s', transform: itemsOpen?'rotate(90deg)':'rotate(0)' }}>▶</span>
+              </div>
+            </div>
+            <div style={{ display: itemsOpen?'block':'none', marginTop:12 }}>
             <div style={{ background:'var(--paper-deep)', padding:12, borderRadius:8, marginBottom:12 }}>
+              <div className="field" style={{ marginBottom:10 }}>
+                <label>從產品庫快速帶入（選擇後自動填入名稱、規格、單價、成本）</label>
+                <select className="select" value="" onChange={e=>{
+                  const name = e.target.value;
+                  if (!name) return;
+                  pickProduct(name);
+                  e.target.value = '';
+                }}>
+                  <option value="">— 選擇已儲存產品 —</option>
+                  {(state.products||[]).filter(p=>!p._deleted).map(p=>(
+                    <option key={p.id} value={p.name}>{p.name}{p.spec?` · ${p.spec}`:''}</option>
+                  ))}
+                </select>
+              </div>
               <div className="row" style={{ marginBottom:10 }}>
-                <div className="field"><label>品項名稱</label><input className="input" value={qItem.name} onChange={e=>pickProduct(e.target.value)} list="quote-products" placeholder="輸入或選擇既有產品"/>
-                  <datalist id="quote-products">{state.products.map(p=><option key={p.id} value={p.name}/>)}</datalist></div>
+                <div className="field"><label>品項名稱</label><input className="input" value={qItem.name} onChange={e=>setQItem({...qItem,name:e.target.value})} placeholder="或手動輸入"/></div>
                 <div className="field"><label>規格</label><input className="input" value={qItem.spec} onChange={e=>setQItem({...qItem,spec:e.target.value})}/></div>
               </div>
-              <div className="row-3" style={{ marginBottom:10 }}>
-                <div className="field"><label>數量</label><input className="input mono" type="number" value={qItem.qty} onChange={e=>setQItem({...qItem,qty:e.target.value})}/></div>
-                <div className="field"><label>單價</label><input className="input mono" type="number" value={qItem.price} onChange={e=>setQItem({...qItem,price:e.target.value})}/></div>
-                <div className="field"><label>成本</label><input className="input mono" type="number" value={qItem.cost} onChange={e=>setQItem({...qItem,cost:e.target.value})}/></div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:10 }}>
+                <div className="field" style={{ minWidth:0 }}><label>數量</label><input className="input mono" type="number" value={qItem.qty} onChange={e=>setQItem({...qItem,qty:e.target.value})} style={{ width:'100%' }}/></div>
+                <div className="field" style={{ minWidth:0 }}><label>單價</label><input className="input mono" type="number" value={qItem.price} onChange={e=>setQItem({...qItem,price:e.target.value})} style={{ width:'100%' }}/></div>
+                <div className="field" style={{ minWidth:0 }}><label>成本</label><input className="input mono" type="number" value={qItem.cost} onChange={e=>setQItem({...qItem,cost:e.target.value})} style={{ width:'100%' }}/></div>
               </div>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                 <span className="mono" style={{ color:'var(--clay)', fontWeight:700 }}>小計 {fmtMoney(qItem.qty*qItem.price)}</span>
@@ -609,13 +649,20 @@ const QuotesView = ({ state, setState }) => {
                 </tbody>
               </table>
             ) : <EmptyState icon="quote" title="尚未加入品項"/>}
+            </div>
           </div>
         </div>
 
         {/* Summary */}
         <div className="card" style={{ alignSelf:'flex-start', position:'sticky', top:16 }}>
-          <div className="card-head"><div className="card-title">總計</div></div>
-          <div style={{ display:'flex', flexDirection:'column', gap:8, fontSize:13 }}>
+          <div className="card-head" style={{ cursor:'pointer', userSelect:'none' }} onClick={()=>setTotalOpen(o=>!o)}>
+            <div className="card-title">總計</div>
+            <div className="card-subtle" style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <span className="mono" style={{ fontWeight:700, color:'var(--clay)' }}>{fmtMoney(grand)}</span>
+              <span style={{ display:'inline-block', transition:'transform .2s', transform: totalOpen?'rotate(90deg)':'rotate(0)' }}>▶</span>
+            </div>
+          </div>
+          <div style={{ display: totalOpen?'flex':'none', flexDirection:'column', gap:8, fontSize:13, marginTop:12 }}>
             <div style={{ display:'flex', justifyContent:'space-between' }}><span className="muted">總成本</span><span className="mono">{fmtMoney(totalCost)}</span></div>
             <div style={{ display:'flex', justifyContent:'space-between' }}><span className="muted">小計</span><span className="mono">{fmtMoney(subtotal)}</span></div>
             <div style={{ display:'flex', justifyContent:'space-between' }}><span className="muted">稅額 ({current.tax}%)</span><span className="mono">{fmtMoney(taxAmt)}</span></div>
@@ -635,7 +682,7 @@ const QuotesView = ({ state, setState }) => {
       </div>
 
       {/* Preview modal */}
-      <Modal open={previewOpen} onClose={()=>setPreviewOpen(false)} title="報價單預覽" width={720}
+      <Modal open={previewOpen} onClose={()=>setPreviewOpen(false)} title="報價單預覽 (A4)" width={840}
         footer={<><div style={{ flex:1 }}/>
           <button className="btn btn-ghost" onClick={()=>setPreviewOpen(false)}>關閉</button>
           <button className="btn btn-primary" onClick={()=>{ toast('已下載圖片（示意）'); }}><Icon name="download" size={13}/> 下載圖片</button>
@@ -671,68 +718,116 @@ const QuotesView = ({ state, setState }) => {
   );
 };
 
-const QuotePreview = ({ q, subtotal, taxAmt, grand }) => (
-  <div style={{ background:'#fff', padding:28, border:'1px solid var(--rule)', borderRadius:8, fontFamily:'var(--f-serif)' }}>
-    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', paddingBottom:14, borderBottom:'2px solid var(--ink)' }}>
-      <div>
-        <div style={{ fontSize:26, fontWeight:700, letterSpacing:'0.02em' }}>報價單</div>
-        <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:4, fontFamily:'var(--f-mono)' }}>QUOTATION</div>
+const QuotePreview = ({ q, subtotal, taxAmt, grand }) => {
+  const MIN_ROWS = 12;
+  const rows = Math.max(q.items.length, MIN_ROWS);
+  const taxLabel = `${q.tax || 0}%營業稅`;
+  return (
+    <div className="quote-a4" style={{
+      width:'210mm', minHeight:'297mm', boxSizing:'border-box',
+      padding:'16mm 14mm 14mm', background:'#fff', color:'#1a1a1a',
+      fontFamily:"'Noto Serif TC','PingFang TC','Microsoft JhengHei',serif",
+      fontSize:'10.5pt', lineHeight:1.5,
+      display:'flex', flexDirection:'column', gap:'4mm',
+      boxShadow:'0 8px 32px rgba(0,0,0,0.12)',
+    }}>
+      {/* Title */}
+      <div style={{ textAlign:'center', paddingBottom:'4mm', borderBottom:'2.2pt solid #1a1a1a' }}>
+        <div style={{ fontSize:'24pt', fontWeight:700, letterSpacing:'10pt', paddingLeft:'10pt' }}>碰器 估價單</div>
+        <div style={{ fontSize:'9pt', letterSpacing:'4pt', color:'#888', marginTop:'1.5mm', fontFamily:"'JetBrains Mono','Courier New',monospace" }}>QUOTATION</div>
       </div>
-      <div style={{ textAlign:'right' }}>
-        <div style={{ fontSize:15, fontWeight:600 }}>{q.myco}</div>
-        <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:4, fontFamily:'var(--f-sans)', lineHeight:1.5 }}>
-          {q.myName}<br/>{q.myPhone}<br/>{q.myEmail}
-        </div>
+
+      {/* Client info block */}
+      <div style={{ display:'grid', gridTemplateColumns:'1.6fr 1fr', columnGap:'8mm', rowGap:'2mm' }}>
+        <div><span style={{color:'#777'}}>客戶名稱：</span><span style={{fontWeight:700}}>{q.client||'　'}</span></div>
+        <div><span style={{color:'#777'}}>電　　話：</span><span>{q.cPhone||'　'}</span></div>
+        <div><span style={{color:'#777'}}>地　　址：</span><span>{q.cAddress||'　'}</span></div>
+        <div><span style={{color:'#777'}}>日　　期：</span><span style={{fontFamily:"'JetBrains Mono',monospace"}}>{q.date||'　'}</span></div>
+        <div><span style={{color:'#777'}}>聯 絡 人：</span><span>{q.cName||'　'}</span></div>
+        <div><span style={{color:'#777'}}>編　　號：</span><span style={{fontFamily:"'JetBrains Mono',monospace"}}>{q.num||'　'}</span></div>
       </div>
-    </div>
-    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, padding:'16px 0', fontFamily:'var(--f-sans)' }}>
-      <div>
-        <div style={{ fontSize:10, color:'var(--ink-mute)', letterSpacing:1.4, textTransform:'uppercase', marginBottom:4 }}>BILL TO</div>
-        <div style={{ fontSize:15, fontWeight:700, fontFamily:'var(--f-serif)' }}>{q.client||'（客戶）'}</div>
-        <div style={{ fontSize:12, color:'var(--ink-mute)', marginTop:3, lineHeight:1.5 }}>
-          {q.cName&&<>{q.cName}<br/></>}{q.cPhone&&<>{q.cPhone}<br/></>}{q.cEmail}
-        </div>
-      </div>
-      <div style={{ textAlign:'right' }}>
-        <div style={{ display:'grid', gridTemplateColumns:'auto auto', gap:'4px 12px', justifyContent:'end', fontSize:12, fontFamily:'var(--f-mono)' }}>
-          <span className="muted">報價編號</span><span>{q.num}</span>
-          <span className="muted">報價日期</span><span>{q.date}</span>
-          <span className="muted">有效期限</span><span>{q.valid||'—'}</span>
-        </div>
-      </div>
-    </div>
-    <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'var(--f-sans)', fontSize:12, marginBottom:16 }}>
-      <thead><tr style={{ background:'var(--ink)', color:'var(--paper-soft)' }}>
-        <th style={{ padding:'9px 10px', textAlign:'left', fontSize:10, letterSpacing:1.4 }}>#</th>
-        <th style={{ padding:'9px 10px', textAlign:'left', fontSize:10, letterSpacing:1.4 }}>品項</th>
-        <th style={{ padding:'9px 10px', textAlign:'right', fontSize:10, letterSpacing:1.4 }}>數量</th>
-        <th style={{ padding:'9px 10px', textAlign:'right', fontSize:10, letterSpacing:1.4 }}>單價</th>
-        <th style={{ padding:'9px 10px', textAlign:'right', fontSize:10, letterSpacing:1.4 }}>小計</th>
-      </tr></thead>
-      <tbody>
-        {q.items.map((it,i)=>(
-          <tr key={i} style={{ background: i%2?'var(--paper-soft)':'#fff', borderBottom:'1px solid var(--rule-soft)' }}>
-            <td style={{ padding:10, color:'var(--ink-mute)' }}>{i+1}</td>
-            <td style={{ padding:10, fontWeight:600 }}>{it.name}{it.spec && <div style={{ fontWeight:400, color:'var(--ink-mute)', fontSize:11, marginTop:2 }}>{it.spec}</div>}</td>
-            <td style={{ padding:10, textAlign:'right', fontFamily:'var(--f-mono)' }}>{it.qty}</td>
-            <td style={{ padding:10, textAlign:'right', fontFamily:'var(--f-mono)' }}>{fmtMoney(it.price)}</td>
-            <td style={{ padding:10, textAlign:'right', fontFamily:'var(--f-mono)', fontWeight:700 }}>{fmtMoney(it.qty*it.price)}</td>
+
+      {/* Items table */}
+      <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed', marginTop:'1mm' }}>
+        <colgroup>
+          <col style={{ width:'8%' }}/>
+          <col style={{ width:'22%' }}/>
+          <col style={{ width:'30%' }}/>
+          <col style={{ width:'10%' }}/>
+          <col style={{ width:'14%' }}/>
+          <col style={{ width:'16%' }}/>
+        </colgroup>
+        <thead>
+          <tr style={{ background:'#1a1a1a', color:'#fff' }}>
+            <th style={{ padding:'2.2mm 2mm', textAlign:'center', fontSize:'10pt', fontWeight:700, letterSpacing:'1pt' }}>序號</th>
+            <th style={{ padding:'2.2mm 2mm', textAlign:'left',   fontSize:'10pt', fontWeight:700, letterSpacing:'1pt' }}>品名</th>
+            <th style={{ padding:'2.2mm 2mm', textAlign:'left',   fontSize:'10pt', fontWeight:700, letterSpacing:'1pt' }}>規格</th>
+            <th style={{ padding:'2.2mm 2mm', textAlign:'right',  fontSize:'10pt', fontWeight:700, letterSpacing:'1pt' }}>數量</th>
+            <th style={{ padding:'2.2mm 2mm', textAlign:'right',  fontSize:'10pt', fontWeight:700, letterSpacing:'1pt' }}>單價</th>
+            <th style={{ padding:'2.2mm 2mm', textAlign:'right',  fontSize:'10pt', fontWeight:700, letterSpacing:'1pt' }}>金額（未稅）</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
-    <div style={{ display:'flex', justifyContent:'flex-end' }}>
-      <div style={{ minWidth:240, fontFamily:'var(--f-mono)' }}>
-        <div style={{ display:'flex', justifyContent:'space-between', padding:'4px 0' }}><span className="muted">小計</span><span>{fmtMoney(subtotal)}</span></div>
-        <div style={{ display:'flex', justifyContent:'space-between', padding:'4px 0' }}><span className="muted">稅額 ({q.tax}%)</span><span>{fmtMoney(taxAmt)}</span></div>
-        <div style={{ background:'var(--clay)', color:'var(--paper-soft)', padding:'10px 14px', marginTop:8, borderRadius:6, display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
-          <span style={{ fontFamily:'var(--f-serif)', fontSize:13 }}>合計金額</span>
-          <span style={{ fontSize:22, fontWeight:700 }}>{fmtMoney(grand)}</span>
+        </thead>
+        <tbody>
+          {Array.from({ length: rows }).map((_, i) => {
+            const it = q.items[i];
+            return (
+              <tr key={i} style={{ borderBottom:'0.4pt solid #c8c8c8', height:'8mm' }}>
+                <td style={{ padding:'1.5mm 2mm', textAlign:'center', color:'#666', fontFamily:"'JetBrains Mono',monospace" }}>{i+1}</td>
+                <td style={{ padding:'1.5mm 2mm', fontWeight:600, wordBreak:'break-word' }}>{it?.name||''}</td>
+                <td style={{ padding:'1.5mm 2mm', color:'#444', fontSize:'10pt', wordBreak:'break-word' }}>{it?.spec||''}</td>
+                <td style={{ padding:'1.5mm 2mm', textAlign:'right', fontFamily:"'JetBrains Mono',monospace" }}>{it?it.qty:''}</td>
+                <td style={{ padding:'1.5mm 2mm', textAlign:'right', fontFamily:"'JetBrains Mono',monospace" }}>{it?fmtMoney(it.price):''}</td>
+                <td style={{ padding:'1.5mm 2mm', textAlign:'right', fontFamily:"'JetBrains Mono',monospace", fontWeight:700 }}>{it?fmtMoney(it.qty*it.price):''}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {/* Totals (right-aligned) */}
+      <div style={{ marginLeft:'auto', width:'52%', marginTop:'2mm' }}>
+        <table style={{ width:'100%', borderCollapse:'collapse' }}>
+          <tbody>
+            <tr style={{ borderBottom:'0.4pt solid #c8c8c8' }}>
+              <td style={{ padding:'2mm 3mm', fontSize:'10.5pt', color:'#444' }}>小　　計</td>
+              <td style={{ padding:'2mm 3mm', textAlign:'right', fontFamily:"'JetBrains Mono',monospace" }}>{fmtMoney(subtotal)}</td>
+            </tr>
+            <tr style={{ borderBottom:'0.4pt solid #c8c8c8' }}>
+              <td style={{ padding:'2mm 3mm', fontSize:'10.5pt', color:'#444' }}>{taxLabel}</td>
+              <td style={{ padding:'2mm 3mm', textAlign:'right', fontFamily:"'JetBrains Mono',monospace" }}>{fmtMoney(taxAmt)}</td>
+            </tr>
+            <tr style={{ background:'#1a1a1a', color:'#fff' }}>
+              <td style={{ padding:'2.5mm 3mm', fontSize:'12pt', fontWeight:700, letterSpacing:'2pt' }}>總　　計</td>
+              <td style={{ padding:'2.5mm 3mm', textAlign:'right', fontSize:'14pt', fontWeight:700, fontFamily:"'JetBrains Mono',monospace" }}>{fmtMoney(grand)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Note */}
+      {q.note && (
+        <div style={{ marginTop:'3mm', fontSize:'9.5pt', color:'#444', lineHeight:1.7 }}>
+          <div style={{ fontWeight:700, color:'#1a1a1a', marginBottom:'1mm', letterSpacing:'1pt' }}>備　　註</div>
+          <div style={{ whiteSpace:'pre-line', paddingLeft:'2mm', borderLeft:'2pt solid #c0a060' }}>{q.note}</div>
+        </div>
+      )}
+
+      {/* Spacer pushes footer to bottom */}
+      <div style={{ flex:1 }}/>
+
+      {/* Footer - my company */}
+      <div style={{ paddingTop:'4mm', borderTop:'1pt solid #1a1a1a', fontSize:'10pt', lineHeight:1.7 }}>
+        <div style={{ fontWeight:700, fontSize:'12pt', letterSpacing:'2pt', marginBottom:'1.5mm' }}>{q.myco}</div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', columnGap:'8mm', rowGap:'1mm', fontSize:'10pt', color:'#444' }}>
+          {q.myAddress && <div><span style={{color:'#777'}}>地　　址：</span>{q.myAddress}</div>}
+          {q.myTaxId   && <div><span style={{color:'#777'}}>統一編號：</span><span style={{fontFamily:"'JetBrains Mono',monospace"}}>{q.myTaxId}</span></div>}
+          {q.myName    && <div><span style={{color:'#777'}}>聯 絡 人：</span>{q.myName}</div>}
+          {q.myPhone   && <div><span style={{color:'#777'}}>電　　話：</span><span style={{fontFamily:"'JetBrains Mono',monospace"}}>{q.myPhone}</span></div>}
+          {q.myEmail   && <div style={{ gridColumn:'1 / -1' }}><span style={{color:'#777'}}>E-mail：</span><span style={{fontFamily:"'JetBrains Mono',monospace"}}>{q.myEmail}</span></div>}
         </div>
       </div>
     </div>
-    {q.note && <div style={{ marginTop:16, fontSize:11, color:'var(--ink-mute)', lineHeight:1.7, fontFamily:'var(--f-sans)', whiteSpace:'pre-line', paddingTop:12, borderTop:'1px dashed var(--rule)' }}>{q.note}</div>}
-  </div>
-);
+  );
+};
 
 Object.assign(window, { ProductsView, QuotesView });
