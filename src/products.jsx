@@ -636,16 +636,16 @@ const QuotesView = ({ state, setState }) => {
               </div>
             </div>
             <div style={{ display: companyOpen?'flex':'none', flexDirection:'column', gap:12, marginTop:12 }}>
-              <div className="row">
+              <div className="row-keep">
                 <div className="field"><label>報價單編號</label><input className="input mono" value={current.num} onChange={e=>setCurrent({...current,num:e.target.value})}/></div>
                 <div className="field"><label>報價日期</label><input className="input" type="date" value={current.date} onChange={e=>setCurrent({...current,date:e.target.value})}/></div>
               </div>
               <hr className="hr-soft"/>
-              <div className="row">
+              <div className="row-keep">
                 <div className="field"><label>我方公司</label><input className="input" value={current.myco} onChange={e=>setCurrent({...current,myco:e.target.value})}/></div>
                 <div className="field"><label>統一編號</label><input className="input mono" value={current.myTaxId||''} onChange={e=>setCurrent({...current,myTaxId:e.target.value})}/></div>
               </div>
-              <div className="row">
+              <div className="row-keep">
                 <div className="field"><label>姓名</label><input className="input" value={current.myName} onChange={e=>setCurrent({...current,myName:e.target.value})}/></div>
                 <div className="field"><label>電話</label><input className="input" value={current.myPhone} onChange={e=>setCurrent({...current,myPhone:e.target.value})}/></div>
               </div>
@@ -669,12 +669,12 @@ const QuotesView = ({ state, setState }) => {
                 <datalist id="quote-clients">{state.customers.filter(c=>!c._deleted).map(c=><option key={c.id} value={c.name}/>)}</datalist>
               </div>
               <div className="field"><label>客戶地址</label><input className="input" value={current.cAddress||''} onChange={e=>setCurrent({...current,cAddress:e.target.value})}/></div>
-              <div className="row">
+              <div className="row-keep">
                 <div className="field"><label>聯絡人</label><input className="input" value={current.cName} onChange={e=>setCurrent({...current,cName:e.target.value})}/></div>
                 <div className="field"><label>電話</label><input className="input" value={current.cPhone} onChange={e=>setCurrent({...current,cPhone:e.target.value})}/></div>
               </div>
               <div className="field"><label>客戶 Email</label><input className="input" value={current.cEmail} onChange={e=>setCurrent({...current,cEmail:e.target.value})}/></div>
-              <div className="row">
+              <div className="row-keep">
                 <div className="field"><label>有效期限</label><input className="input" type="date" value={current.valid} onChange={e=>setCurrent({...current,valid:e.target.value})}/></div>
                 <div className="field"><label>稅率 %</label><input className="input mono" type="number" value={current.tax} onChange={e=>setCurrent({...current,tax:e.target.value})}/></div>
               </div>
