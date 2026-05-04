@@ -469,7 +469,8 @@ const QuotesView = ({ state, setState }) => {
   const [qItem, setQItem] = useStateP({ name:'', spec:'', qty:1, price:0, cost:0 });
   const [previewOpen, setPreviewOpen] = useStateP(false);
   const [listOpen, setListOpen] = useStateP(false);
-  const [infoOpen, setInfoOpen] = useStateP(false);
+  const [companyOpen, setCompanyOpen] = useStateP(false);
+  const [customerOpen, setCustomerOpen] = useStateP(false);
   const [itemsOpen, setItemsOpen] = useStateP(false);
   const [totalOpen, setTotalOpen] = useStateP(false);
 
@@ -548,22 +549,21 @@ const QuotesView = ({ state, setState }) => {
 
       <div className="grid-2-1-p">
         <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          {/* 公司資訊 */}
           <div className="card">
-            <div className="card-head" style={{ cursor:'pointer', userSelect:'none' }} onClick={()=>setInfoOpen(o=>!o)}>
-              <div className="card-title">基本資訊</div>
+            <div className="card-head" style={{ cursor:'pointer', userSelect:'none' }} onClick={()=>setCompanyOpen(o=>!o)}>
+              <div className="card-title">公司資訊</div>
               <div className="card-subtle" style={{ display:'flex', alignItems:'center', gap:6 }}>
-                {current.client ? <span style={{ color:'var(--ink-mute)' }}>{current.client}</span> : <span style={{ color:'var(--ink-mute)' }}>點擊展開填寫</span>}
-                <span style={{ display:'inline-block', transition:'transform .2s', transform: infoOpen?'rotate(90deg)':'rotate(0)' }}>▶</span>
+                <span style={{ color:'var(--ink-mute)' }}>{current.myco || '點擊展開填寫'}</span>
+                <span style={{ display:'inline-block', transition:'transform .2s', transform: companyOpen?'rotate(90deg)':'rotate(0)' }}>▶</span>
               </div>
             </div>
-            <div style={{ display: infoOpen?'flex':'none', flexDirection:'column', gap:12, marginTop:12 }}>
-              {/* 報價單基本 */}
+            <div style={{ display: companyOpen?'flex':'none', flexDirection:'column', gap:12, marginTop:12 }}>
               <div className="row">
                 <div className="field"><label>報價單編號</label><input className="input mono" value={current.num} onChange={e=>setCurrent({...current,num:e.target.value})}/></div>
                 <div className="field"><label>報價日期</label><input className="input" type="date" value={current.date} onChange={e=>setCurrent({...current,date:e.target.value})}/></div>
               </div>
               <hr className="hr-soft"/>
-              {/* 本公司資訊 */}
               <div className="row">
                 <div className="field"><label>我方公司</label><input className="input" value={current.myco} onChange={e=>setCurrent({...current,myco:e.target.value})}/></div>
                 <div className="field"><label>統一編號</label><input className="input mono" value={current.myTaxId||''} onChange={e=>setCurrent({...current,myTaxId:e.target.value})}/></div>
@@ -574,8 +574,19 @@ const QuotesView = ({ state, setState }) => {
               </div>
               <div className="field"><label>我方地址</label><input className="input" value={current.myAddress||''} onChange={e=>setCurrent({...current,myAddress:e.target.value})}/></div>
               <div className="field"><label>Email</label><input className="input" value={current.myEmail} onChange={e=>setCurrent({...current,myEmail:e.target.value})}/></div>
-              <hr className="hr-soft"/>
-              {/* 客戶資訊 */}
+            </div>
+          </div>
+
+          {/* 客戶資訊 */}
+          <div className="card">
+            <div className="card-head" style={{ cursor:'pointer', userSelect:'none' }} onClick={()=>setCustomerOpen(o=>!o)}>
+              <div className="card-title">客戶資訊</div>
+              <div className="card-subtle" style={{ display:'flex', alignItems:'center', gap:6 }}>
+                <span style={{ color:'var(--ink-mute)' }}>{current.client || '點擊展開填寫'}</span>
+                <span style={{ display:'inline-block', transition:'transform .2s', transform: customerOpen?'rotate(90deg)':'rotate(0)' }}>▶</span>
+              </div>
+            </div>
+            <div style={{ display: customerOpen?'flex':'none', flexDirection:'column', gap:12, marginTop:12 }}>
               <div className="field"><label>客戶名稱<span className="req">*</span></label>
                 <input className="input" list="quote-clients" value={current.client} onChange={e=>setCurrent({...current,client:e.target.value})}/>
                 <datalist id="quote-clients">{state.customers.filter(c=>!c._deleted).map(c=><option key={c.id} value={c.name}/>)}</datalist>
