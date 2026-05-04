@@ -532,6 +532,83 @@ const QuotesView = ({ state, setState }) => {
   const loadQuote = (q) => { setCurrent({...q}); setListOpen(false); toast('已載入報價'); };
   const newQuote = () => setCurrent(emptyQ());
 
+  // 動態載入 html2canvas（首次使用才下載）
+  const _loadH2C = () => new Promise((resolve, reject) => {
+    if (window.html2canvas) return resolve(window.html2canvas);
+    if (document.querySelector('script[data-h2c]')) {
+      const t = setInterval(() => { if (window.html2canvas) { clearInterval(t); resolve(window.html2canvas); } }, 50);
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.dataset.h2c = '1';
+    s.onload = () => resolve(window.html2canvas);
+    s.onerror = () => reject(new Error('html2canvas load failed'));
+    document.head.appendChild(s);
+  });
+
+  // 下載報價圖片（手機優先用 Web Share 讓使用者存到相簿；桌面觸發瀏覽器下載對話框）
+  const downloadQuoteImage = async () => {
+    try {
+      const h2c = await _loadH2C();
+      const sheet = document.querySelector('.quote-a4');
+      if (!sheet) { toast('找不到預覽'); return; }
+      // 截圖前先把 transform 取消，避免被 scale 影響截圖尺寸
+      const wrap = sheet.parentElement;
+      const prevT = sheet.style.transform;
+      const prevH = wrap?.style.height;
+      sheet.style.transform = '';
+      if (wrap) wrap.style.height = 'auto';
+      const canvas = await h2c(sheet, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+      sheet.style.transform = prevT;
+      if (wrap) wrap.style.height = prevH;
+      const filename = `碰器估價單-${current.client||'未指定'}-${current.date||''}.jpg`.replace(/[\\/:*?"<>|]/g,'_');
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.92));
+      // 手機 + Web Share API（包含「儲存影像」可存到相簿）
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (isMobile && navigator.share && navigator.canShare) {
+        const file = new File([blob], filename, { type: 'image/jpeg' });
+        if (navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: '碰器估價單' });
+            return;
+          } catch (e) { if (e.name === 'AbortError') return; }
+        }
+      }
+      // 桌面 / Web Share 不支援 → 觸發瀏覽器下載（瀏覽器設定為「每次都詢問」時會跳儲存對話框）
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.style.display = 'none';
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { try { a.remove(); URL.revokeObjectURL(url); } catch {} }, 2000);
+      toast('已下載圖片');
+    } catch (e) {
+      console.error('[quote download]', e);
+      toast('下載失敗：' + (e?.message || e));
+    }
+  };
+
+  // 預覽開啟時，依 viewport 寬度自動縮放 A4 sheet 顯示
+  React.useEffect(() => {
+    if (!previewOpen) return;
+    const fit = () => {
+      const wrap = document.querySelector('.quote-preview-scale');
+      const sheet = wrap?.querySelector('.quote-a4');
+      if (!wrap || !sheet) return;
+      const SHEET_W_PX = 794; // 210mm @ ~96dpi
+      const SHEET_H_PX = 1123; // 297mm
+      const avail = wrap.parentElement.clientWidth - 4;
+      const scale = Math.min(1, avail / SHEET_W_PX);
+      sheet.style.transform = `scale(${scale})`;
+      sheet.style.transformOrigin = 'top left';
+      wrap.style.width = SHEET_W_PX + 'px';
+      wrap.style.height = (SHEET_H_PX * scale) + 'px';
+    };
+    const t = setTimeout(fit, 50);
+    window.addEventListener('resize', fit);
+    return () => { clearTimeout(t); window.removeEventListener('resize', fit); };
+  }, [previewOpen]);
+
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
       <div className="topbar">
@@ -696,9 +773,13 @@ const QuotesView = ({ state, setState }) => {
       <Modal open={previewOpen} onClose={()=>setPreviewOpen(false)} title="報價單預覽 (A4)" width={840}
         footer={<><div style={{ flex:1 }}/>
           <button className="btn btn-ghost" onClick={()=>setPreviewOpen(false)}>關閉</button>
-          <button className="btn btn-primary" onClick={()=>{ toast('已下載圖片（示意）'); }}><Icon name="download" size={13}/> 下載圖片</button>
+          <button className="btn btn-primary" onClick={downloadQuoteImage}><Icon name="download" size={13}/> 下載圖片</button>
         </>}>
-        <QuotePreview q={current} subtotal={subtotal} taxAmt={taxAmt} grand={grand}/>
+        <div style={{ overflow:'auto', maxWidth:'100%' }}>
+          <div className="quote-preview-scale">
+            <QuotePreview q={current} subtotal={subtotal} taxAmt={taxAmt} grand={grand}/>
+          </div>
+        </div>
       </Modal>
 
       {/* History modal */}
