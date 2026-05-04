@@ -811,9 +811,10 @@ const QuotesView = ({ state, setState }) => {
 };
 
 const QuotePreview = ({ q, subtotal, taxAmt, grand }) => {
-  const MIN_ROWS = 12;
+  const MIN_ROWS = 15;
   const rows = Math.max(q.items.length, MIN_ROWS);
   const taxLabel = `${q.tax || 0}%營業稅`;
+  const ROW_BORDER = '0.3pt solid #ece5d5'; // 淡米色分隔線
   return (
     <div className="quote-a4" style={{
       width:'210mm', minHeight:'297mm', boxSizing:'border-box',
@@ -824,23 +825,24 @@ const QuotePreview = ({ q, subtotal, taxAmt, grand }) => {
       boxShadow:'0 8px 32px rgba(0,0,0,0.12)',
     }}>
       {/* Title */}
-      <div style={{ textAlign:'center', paddingBottom:'4mm', borderBottom:'2.2pt solid #1a1a1a' }}>
+      <div style={{ textAlign:'center', paddingBottom:'4mm', borderBottom:'2.2pt solid #1a1a1a', position:'relative' }}>
         <div style={{ fontSize:'24pt', fontWeight:700, letterSpacing:'10pt', paddingLeft:'10pt' }}>碰器 估價單</div>
-        <div style={{ fontSize:'9pt', letterSpacing:'4pt', color:'#888', marginTop:'1.5mm', fontFamily:"'JetBrains Mono','Courier New',monospace" }}>QUOTATION</div>
+        <div style={{ fontSize:'9pt', letterSpacing:'4pt', color:'#a08858', marginTop:'1.5mm', fontFamily:"'JetBrains Mono','Courier New',monospace" }}>QUOTATION</div>
+        <div style={{ position:'absolute', left:0, right:0, bottom:'-1.2pt', height:'0.8pt', background:'#c0a060' }}/>
       </div>
 
       {/* Client info block */}
-      <div style={{ display:'grid', gridTemplateColumns:'1.6fr 1fr', columnGap:'8mm', rowGap:'2mm' }}>
-        <div><span style={{color:'#777'}}>客戶名稱：</span><span style={{fontWeight:700}}>{q.client||'　'}</span></div>
-        <div><span style={{color:'#777'}}>電　　話：</span><span>{q.cPhone||'　'}</span></div>
-        <div><span style={{color:'#777'}}>地　　址：</span><span>{q.cAddress||'　'}</span></div>
-        <div><span style={{color:'#777'}}>日　　期：</span><span style={{fontFamily:"'JetBrains Mono',monospace"}}>{q.date||'　'}</span></div>
-        <div><span style={{color:'#777'}}>聯 絡 人：</span><span>{q.cName||'　'}</span></div>
-        <div><span style={{color:'#777'}}>編　　號：</span><span style={{fontFamily:"'JetBrains Mono',monospace"}}>{q.num||'　'}</span></div>
+      <div style={{ display:'grid', gridTemplateColumns:'1.6fr 1fr', columnGap:'8mm', rowGap:'2mm', padding:'2mm 0' }}>
+        <div><span style={{color:'#7a6f55', letterSpacing:'1pt'}}>客戶名稱：</span><span style={{fontWeight:700}}>{q.client||'　'}</span></div>
+        <div><span style={{color:'#7a6f55', letterSpacing:'1pt'}}>電　　話：</span><span>{q.cPhone||'　'}</span></div>
+        <div><span style={{color:'#7a6f55', letterSpacing:'1pt'}}>地　　址：</span><span>{q.cAddress||'　'}</span></div>
+        <div><span style={{color:'#7a6f55', letterSpacing:'1pt'}}>日　　期：</span><span style={{fontFamily:"'JetBrains Mono',monospace"}}>{q.date||'　'}</span></div>
+        <div><span style={{color:'#7a6f55', letterSpacing:'1pt'}}>聯 絡 人：</span><span>{q.cName||'　'}</span></div>
+        <div><span style={{color:'#7a6f55', letterSpacing:'1pt'}}>編　　號：</span><span style={{fontFamily:"'JetBrains Mono',monospace"}}>{q.num||'　'}</span></div>
       </div>
 
       {/* Items table */}
-      <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed', marginTop:'1mm' }}>
+      <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed', marginTop:'1mm', border:'0.5pt solid #1a1a1a' }}>
         <colgroup>
           <col style={{ width:'8%' }}/>
           <col style={{ width:'22%' }}/>
@@ -851,25 +853,26 @@ const QuotePreview = ({ q, subtotal, taxAmt, grand }) => {
         </colgroup>
         <thead>
           <tr style={{ background:'#1a1a1a', color:'#fff' }}>
-            <th style={{ padding:'2.2mm 2mm', textAlign:'center', fontSize:'10pt', fontWeight:700, letterSpacing:'1pt' }}>序號</th>
-            <th style={{ padding:'2.2mm 2mm', textAlign:'left',   fontSize:'10pt', fontWeight:700, letterSpacing:'1pt' }}>品名</th>
-            <th style={{ padding:'2.2mm 2mm', textAlign:'left',   fontSize:'10pt', fontWeight:700, letterSpacing:'1pt' }}>規格</th>
-            <th style={{ padding:'2.2mm 2mm', textAlign:'right',  fontSize:'10pt', fontWeight:700, letterSpacing:'1pt' }}>數量</th>
-            <th style={{ padding:'2.2mm 2mm', textAlign:'right',  fontSize:'10pt', fontWeight:700, letterSpacing:'1pt' }}>單價</th>
-            <th style={{ padding:'2.2mm 2mm', textAlign:'right',  fontSize:'10pt', fontWeight:700, letterSpacing:'1pt' }}>金額（未稅）</th>
+            <th style={{ padding:'2.5mm 2mm', textAlign:'center', fontSize:'10pt', fontWeight:700, letterSpacing:'2pt' }}>序號</th>
+            <th style={{ padding:'2.5mm 2mm', textAlign:'left',   fontSize:'10pt', fontWeight:700, letterSpacing:'2pt' }}>品　名</th>
+            <th style={{ padding:'2.5mm 2mm', textAlign:'left',   fontSize:'10pt', fontWeight:700, letterSpacing:'2pt' }}>規　格</th>
+            <th style={{ padding:'2.5mm 2mm', textAlign:'right',  fontSize:'10pt', fontWeight:700, letterSpacing:'2pt' }}>數量</th>
+            <th style={{ padding:'2.5mm 2mm', textAlign:'right',  fontSize:'10pt', fontWeight:700, letterSpacing:'2pt' }}>單　價</th>
+            <th style={{ padding:'2.5mm 2mm', textAlign:'right',  fontSize:'10pt', fontWeight:700, letterSpacing:'2pt' }}>金額（未稅）</th>
           </tr>
         </thead>
         <tbody>
           {Array.from({ length: rows }).map((_, i) => {
             const it = q.items[i];
+            const zebra = i % 2 === 1 ? '#fbf9f3' : '#fff';
             return (
-              <tr key={i} style={{ borderBottom:'0.4pt solid #c8c8c8', height:'8mm' }}>
-                <td style={{ padding:'1.5mm 2mm', textAlign:'center', color:'#666', fontFamily:"'JetBrains Mono',monospace" }}>{i+1}</td>
-                <td style={{ padding:'1.5mm 2mm', fontWeight:600, wordBreak:'break-word' }}>{it?.name||''}</td>
-                <td style={{ padding:'1.5mm 2mm', color:'#444', fontSize:'10pt', wordBreak:'break-word' }}>{it?.spec||''}</td>
-                <td style={{ padding:'1.5mm 2mm', textAlign:'right', fontFamily:"'JetBrains Mono',monospace" }}>{it?it.qty:''}</td>
-                <td style={{ padding:'1.5mm 2mm', textAlign:'right', fontFamily:"'JetBrains Mono',monospace" }}>{it?fmtMoney(it.price):''}</td>
-                <td style={{ padding:'1.5mm 2mm', textAlign:'right', fontFamily:"'JetBrains Mono',monospace", fontWeight:700 }}>{it?fmtMoney(it.qty*it.price):''}</td>
+              <tr key={i} style={{ borderBottom: ROW_BORDER, height:'7.5mm', background: zebra }}>
+                <td style={{ padding:'1.6mm 2mm', textAlign:'center', color:'#9a8e75', fontFamily:"'JetBrains Mono',monospace", fontSize:'9.5pt' }}>{String(i+1).padStart(2,'0')}</td>
+                <td style={{ padding:'1.6mm 2mm', fontWeight:600, wordBreak:'break-word' }}>{it?.name||''}</td>
+                <td style={{ padding:'1.6mm 2mm', color:'#444', fontSize:'10pt', wordBreak:'break-word' }}>{it?.spec||''}</td>
+                <td style={{ padding:'1.6mm 2mm', textAlign:'right', fontFamily:"'JetBrains Mono',monospace" }}>{it?it.qty:''}</td>
+                <td style={{ padding:'1.6mm 2mm', textAlign:'right', fontFamily:"'JetBrains Mono',monospace" }}>{it?fmtMoney(it.price):''}</td>
+                <td style={{ padding:'1.6mm 2mm', textAlign:'right', fontFamily:"'JetBrains Mono',monospace", fontWeight:700 }}>{it?fmtMoney(it.qty*it.price):''}</td>
               </tr>
             );
           })}
