@@ -1,7 +1,17 @@
 // 碰器嚴選系統 — Product cost + Quote views
 const { useState: useStateP, useMemo: useMemoP } = React;
 
-const ProductsView = ({ state, setState }) => {
+// 數量級距：依數量取對應級距（取 minQty <= qty 的最高門檻級距）；無適用則回 null
+function tierForQty(tiers, qty) {
+  if (!Array.isArray(tiers) || !tiers.length) return null;
+  const q = Number(qty) || 0;
+  const hit = tiers
+    .filter(t => Number(t.minQty) > 0 && q >= Number(t.minQty))
+    .sort((a, b) => Number(b.minQty) - Number(a.minQty));
+  return hit.length ? hit[0] : null;
+}
+
+const ProductsView = ({ state, setState, coll='products', sectionLabel='資源', viewTitle='產品成本分析', itemLabel='產品', showCostsTab=true }) => {
   const [tab, setTab] = useStateP('saved'); // saved | costs
   const [viewMode, setViewMode] = useStateP('grid'); // list | grid
   const [q, setQ] = useStateP('');
@@ -12,8 +22,11 @@ const ProductsView = ({ state, setState }) => {
   const [costModalOpen, setCostModalOpen] = useStateP(false);
   const [costEditingId, setCostEditingId] = useStateP(null);
   const [costForm, setCostForm] = useStateP(emptyCost());
+  // 編輯產品 modal 內各區塊收合狀態
+  const [secOpen, setSecOpen] = useStateP({ direct:true, indirect:true, tiers:true });
+  const toggleSec = (k) => setSecOpen(s => ({ ...s, [k]: !s[k] }));
 
-  function emptyP(){ return { id:'', name:'', spec:'', direct:0, indirect:0, directItems:[], indirectItems:[], price:'', minPrice:'' }; }
+  function emptyP(){ return { id:'', name:'', spec:'', photo:'', direct:0, indirect:0, directItems:[], indirectItems:[], price:'', minPrice:'', tiers:[] }; }
   function emptyCost(){ return { id:'', kind:'direct', name:'', unit:'', price:'' }; }
 
   // 升級舊版明細（只有 n + a）→ 新版（n + unit_q[量詞文字] + unit_p + qty + a）
@@ -102,35 +115,44 @@ const ProductsView = ({ state, setState }) => {
 
   const delItem = (kind, i) => setForm(f => ({ ...f, [kind+'Items']: (f[kind+'Items']||[]).filter((_,idx)=>idx!==i) }));
 
+  // ─── 數量級距（量價表）CRUD ───
+  const addTier = () => setForm(f => ({ ...f, tiers:[...(f.tiers||[]), { minQty:'', cost:'', price:'' }] }));
+  const updTier = (i,k,v) => setForm(f => ({ ...f, tiers:(f.tiers||[]).map((x,idx)=> idx===i ? {...x, [k]:v} : x) }));
+  const delTier = (i) => setForm(f => ({ ...f, tiers:(f.tiers||[]).filter((_,idx)=>idx!==i) }));
+
   const save = () => {
     if (!form.name || !form.price) { toast('請填寫名稱與售價'); return; }
-    const rec = { ...form, direct:directEff, indirect:indirectEff, price:Number(form.price)||0, minPrice:Number(form.minPrice)||0 };
-    if (editingId) setState(s=>({ ...s, products: s.products.map(x=>x.id===editingId?rec:x) }));
-    else setState(s=>({ ...s, products: [{...rec, id:uid()}, ...s.products] }));
+    const tiers = (form.tiers||[])
+      .filter(t => Number(t.minQty) > 0)
+      .map(t => ({ minQty:Number(t.minQty)||0, cost:Number(t.cost)||0, price:Number(t.price)||0 }))
+      .sort((a,b)=> a.minQty - b.minQty);
+    const rec = { ...form, direct:directEff, indirect:indirectEff, price:Number(form.price)||0, minPrice:Number(form.minPrice)||0, tiers };
+    if (editingId) setState(s=>({ ...s, [coll]: (s[coll]||[]).map(x=>x.id===editingId?rec:x) }));
+    else setState(s=>({ ...s, [coll]: [{...rec, id:uid()}, ...(s[coll]||[])] }));
     toast(editingId?'已更新':'已新增');
     setModalOpen(false);
   };
-  const del = () => { if(!confirm('刪除此產品？將移至回收桶（保留 10 天）。'))return; setState(s=> window.softDel(s, 'products', editingId)); setModalOpen(false); toast('已移至回收桶'); };
+  const del = () => { if(!confirm('刪除此'+itemLabel+'？將移至回收桶（保留 10 天）。'))return; setState(s=> window.softDel(s, coll, editingId)); setModalOpen(false); toast('已移至回收桶'); };
 
   // aggregated stats
   const stats = useMemoP(()=>{
-    const ps = state.products.filter(x => !x._deleted);
+    const ps = (state[coll]||[]).filter(x => !x._deleted);
     if (!ps.length) return { grossAvg:0, netAvg:0, count:0 };
     const gross = ps.reduce((a,p)=> a + (p.price-p.direct)/(p.price||1)*100, 0)/ps.length;
     const net = ps.reduce((a,p)=> a + (p.price-p.direct-p.indirect)/(p.price||1)*100, 0)/ps.length;
     return { grossAvg:Math.round(gross), netAvg:Math.round(net), count:ps.length };
-  }, [state.products]);
+  }, [state[coll]]);
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
       <div className="topbar">
         <div className="topbar-l">
-          <div className="eyebrow">資源</div>
-          <h1 className="h1">產品成本分析</h1>
-          <div className="sub">{stats.count} 項產品 · 平均毛利 {stats.grossAvg}% / 淨利 {stats.netAvg}%</div>
+          <div className="eyebrow">{sectionLabel}</div>
+          <h1 className="h1">{viewTitle}</h1>
+          <div className="sub">{stats.count} 項{itemLabel} · 平均毛利 {stats.grossAvg}% / 淨利 {stats.netAvg}%</div>
         </div>
         <div className="topbar-r">
-          {tab==='saved' && <button className="btn btn-primary btn-sm" onClick={openNew}><Icon name="plus" size={14}/> 新增產品</button>}
+          {tab==='saved' && <button className="btn btn-primary btn-sm" onClick={openNew}><Icon name="plus" size={14}/> 新增{itemLabel}</button>}
           {tab==='costs' && <button className="btn btn-primary btn-sm" onClick={openNewCost}><Icon name="plus" size={14}/> 新增成本</button>}
         </div>
       </div>
@@ -138,14 +160,14 @@ const ProductsView = ({ state, setState }) => {
       <div style={{ display:'flex', gap:6, flexWrap:'nowrap', alignItems:'center' }}>
         <div style={{ position:'relative', flex:'1 1 0', minWidth:60 }}>
           <Icon name="search" size={13} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--ink-mute)' }}/>
-          <input className="input has-leading-icon" placeholder={tab==='saved'?'搜尋產品…':'搜尋成本…'} value={q} onChange={e=>setQ(e.target.value)}
+          <input className="input has-leading-icon" placeholder={tab==='saved'?('搜尋'+itemLabel+'…'):'搜尋成本…'} value={q} onChange={e=>setQ(e.target.value)}
             style={{ padding:'6px 11px 6px 30px', fontSize:13, borderRadius:7, width:'100%' }}/>
         </div>
-        <select className="select" value={tab} onChange={e=>setTab(e.target.value)}
+        {showCostsTab && <select className="select" value={tab} onChange={e=>setTab(e.target.value)}
                 style={{ flexShrink:0, width:115, padding:'7px 26px 7px 10px', fontSize:13 }}>
-          <option value="saved">儲存產品</option>
+          <option value="saved">儲存{itemLabel}</option>
           <option value="costs">物料成本</option>
-        </select>
+        </select>}
         <select className="select" value={viewMode} onChange={e=>setViewMode(e.target.value)}
                 style={{ flexShrink:0, width:90, padding:'7px 26px 7px 10px', fontSize:13 }}>
           <option value="list">列表</option>
@@ -155,7 +177,7 @@ const ProductsView = ({ state, setState }) => {
       </div>
 
       {tab==='saved' && (() => {
-        const filtered = state.products.filter(p =>
+        const filtered = (state[coll]||[]).filter(p =>
           !p._deleted && (!q || p.name.includes(q) || (p.spec||'').includes(q)));
         return (
         <div className="card">
@@ -167,12 +189,17 @@ const ProductsView = ({ state, setState }) => {
                 const net = p.price ? Math.round((p.price-tc)/p.price*100) : 0;
                 return (
                   <div key={p.id} className="card flat" style={{ border:'1px solid var(--rule-soft)', padding:14, cursor:'pointer' }} onClick={()=>openEdit(p)}>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
-                      <div style={{ minWidth:0 }}>
-                        <div style={{ fontSize:15, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
+                    <div style={{ width:'100%', height:130, borderRadius:8, overflow:'hidden', background:'var(--paper-deep)', marginBottom:10, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      {p.photo
+                        ? <img src={cldThumb(p.photo, 400)} alt={p.name} style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+                        : <Icon name="image" size={28}/>}
+                    </div>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8, marginBottom:10 }}>
+                      <div style={{ minWidth:0, flex:1 }}>
+                        <div style={{ fontSize:15, fontWeight:700, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden', lineHeight:1.3 }}>{p.name}</div>
                         {p.spec && <div style={{ fontSize:13, color:'var(--ink-mute)' }}>{p.spec}</div>}
                       </div>
-                      <div className="mono" style={{ fontSize:17, fontWeight:700, color:'var(--clay)', flexShrink:0, marginLeft:8 }}>{fmtMoney(p.price)}</div>
+                      <div className="mono" style={{ fontSize:17, fontWeight:700, color:'var(--clay)', flexShrink:0 }}>{fmtMoney(p.price)}</div>
                     </div>
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, padding:'10px 0 8px', borderTop:'1px dashed var(--rule-soft)' }}>
                       <div><div className="eyebrow">總成本</div><div className="mono" style={{ fontSize:14, fontWeight:700 }}>{fmtMoney(Math.round(tc))}</div></div>
@@ -247,7 +274,7 @@ const ProductsView = ({ state, setState }) => {
               })}
             </div>
           )}
-          {filtered.length===0 && <EmptyState icon="product" title={q?'查無符合產品':'尚無產品'}/>}
+          {filtered.length===0 && <EmptyState icon="product" title={q?('查無符合'+itemLabel):('尚無'+itemLabel)}/>}
         </div>
         );
       })()}
@@ -322,7 +349,7 @@ const ProductsView = ({ state, setState }) => {
         );
       })()}
 
-      <Modal open={modalOpen} onClose={()=>setModalOpen(false)} title={editingId?'編輯產品':'新增產品'}
+      <Modal open={modalOpen} onClose={()=>setModalOpen(false)} title={editingId?('編輯'+itemLabel):('新增'+itemLabel)}
         footer={<>
           {editingId && <button className="btn btn-danger" onClick={del}><Icon name="trash" size={13}/> 刪除</button>}
           <div style={{ flex:1 }}/>
@@ -341,14 +368,24 @@ const ProductsView = ({ state, setState }) => {
               <option key={c.id} value={c.name}/>
             ))}
           </datalist>
-          <div className="field"><label>產品名稱<span className="req">*</span></label><input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></div>
+          <div className="field"><label>商品照片</label><PhotoUpload value={form.photo} onChange={(url)=>setForm({...form, photo:url})} size={120}/></div>
+          <div className="field"><label>{itemLabel}名稱<span className="req">*</span></label><input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></div>
           <div className="field"><label>規格</label><input className="input" value={form.spec} onChange={e=>setForm({...form,spec:e.target.value})}/></div>
+          <div className="row-keep">
+            <div className="field"><label>售價<span className="req">*</span></label><input className="input mono" type="number" value={form.price} onChange={e=>setForm({...form,price:e.target.value})}/></div>
+            <div className="field"><label>最低售價</label><input className="input mono" type="number" value={form.minPrice} onChange={e=>setForm({...form,minPrice:e.target.value})}/></div>
+          </div>
           {/* Direct cost items */}
           <div style={{ padding:12, background:'var(--paper-deep)', borderRadius:8 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-              <div style={{ fontSize:12, fontWeight:700, color:'var(--ink-soft)' }}>直接成本明細 <span className="muted" style={{ fontWeight:400 }}>（原料、燃料）</span></div>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={()=>addItem('direct')}><Icon name="plus" size={11}/> 加入項目</button>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: secOpen.direct?8:0, cursor:'pointer' }} onClick={()=>toggleSec('direct')}>
+              <div style={{ fontSize:12, fontWeight:700, color:'var(--ink-soft)', display:'flex', alignItems:'center', gap:6 }}>
+                <span style={{ transition:'transform .2s', transform: secOpen.direct?'rotate(90deg)':'rotate(0)', fontSize:10 }}>▶</span>
+                直接成本明細 <span className="muted" style={{ fontWeight:400 }}>（原料、燃料）</span>
+                {!secOpen.direct && <span className="mono muted" style={{ fontWeight:400 }}>　小計 {fmtMoney(directEff)}</span>}
+              </div>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={(e)=>{ e.stopPropagation(); setSecOpen(s=>({...s,direct:true})); addItem('direct'); }}><Icon name="plus" size={11}/> 加入項目</button>
             </div>
+            <div style={{ display: secOpen.direct?'block':'none' }}>
             {(form.directItems||[]).map((it,i)=>(
               <div key={i} style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:8, padding:8, background:'var(--paper-soft)', borderRadius:6, border:'1px solid var(--rule-soft)' }}>
                 <div style={{ display:'flex', gap:6, alignItems:'center' }}>
@@ -377,14 +414,20 @@ const ProductsView = ({ state, setState }) => {
                 </div>
               )}
             </div>
+            </div>
           </div>
 
           {/* Indirect cost items */}
           <div style={{ padding:12, background:'var(--paper-deep)', borderRadius:8 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-              <div style={{ fontSize:12, fontWeight:700, color:'var(--ink-soft)' }}>間接成本明細 <span className="muted" style={{ fontWeight:400 }}>（人工、包材）</span></div>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={()=>addItem('indirect')}><Icon name="plus" size={11}/> 加入項目</button>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: secOpen.indirect?8:0, cursor:'pointer' }} onClick={()=>toggleSec('indirect')}>
+              <div style={{ fontSize:12, fontWeight:700, color:'var(--ink-soft)', display:'flex', alignItems:'center', gap:6 }}>
+                <span style={{ transition:'transform .2s', transform: secOpen.indirect?'rotate(90deg)':'rotate(0)', fontSize:10 }}>▶</span>
+                間接成本明細 <span className="muted" style={{ fontWeight:400 }}>（人工、包材）</span>
+                {!secOpen.indirect && <span className="mono muted" style={{ fontWeight:400 }}>　小計 {fmtMoney(indirectEff)}</span>}
+              </div>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={(e)=>{ e.stopPropagation(); setSecOpen(s=>({...s,indirect:true})); addItem('indirect'); }}><Icon name="plus" size={11}/> 加入項目</button>
             </div>
+            <div style={{ display: secOpen.indirect?'block':'none' }}>
             {(form.indirectItems||[]).map((it,i)=>(
               <div key={i} style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:8, padding:8, background:'var(--paper-soft)', borderRadius:6, border:'1px solid var(--rule-soft)' }}>
                 <div style={{ display:'flex', gap:6, alignItems:'center' }}>
@@ -413,11 +456,39 @@ const ProductsView = ({ state, setState }) => {
                 </div>
               )}
             </div>
+            </div>
           </div>
 
-          <div className="row-keep">
-            <div className="field"><label>售價<span className="req">*</span></label><input className="input mono" type="number" value={form.price} onChange={e=>setForm({...form,price:e.target.value})}/></div>
-            <div className="field"><label>最低售價</label><input className="input mono" type="number" value={form.minPrice} onChange={e=>setForm({...form,minPrice:e.target.value})}/></div>
+          {/* 數量級距（量價表）*/}
+          <div style={{ padding:12, background:'var(--paper-deep)', borderRadius:8 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: secOpen.tiers?8:0, cursor:'pointer' }} onClick={()=>toggleSec('tiers')}>
+              <label style={{ margin:0, fontWeight:600, display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
+                <span style={{ transition:'transform .2s', transform: secOpen.tiers?'rotate(90deg)':'rotate(0)', fontSize:10 }}>▶</span>
+                數量級距（量價表）
+                {!secOpen.tiers && (form.tiers||[]).length>0 && <span className="muted" style={{ fontWeight:400, fontSize:12 }}>　{form.tiers.length} 級</span>}
+              </label>
+              <button className="btn btn-ink btn-sm" onClick={(e)=>{ e.stopPropagation(); setSecOpen(s=>({...s,tiers:true})); addTier(); }}><Icon name="plus" size={12}/> 新增級距</button>
+            </div>
+            <div style={{ display: secOpen.tiers?'block':'none' }}>
+            {(form.tiers||[]).length === 0 ? (
+              <div style={{ fontSize:12, color:'var(--ink-mute)' }}>未設級距時，報價一律用上方的售價／成本。</div>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 32px', gap:6, fontSize:11, color:'var(--ink-mute)' }}>
+                  <div>數量 ≥</div><div>成本</div><div>售價</div><div></div>
+                </div>
+                {(form.tiers||[]).map((t,i)=>(
+                  <div key={i} style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 32px', gap:6, alignItems:'center' }}>
+                    <input className="input mono" type="number" value={t.minQty} onChange={e=>updTier(i,'minQty',e.target.value)} placeholder="數量"/>
+                    <input className="input mono" type="number" value={t.cost} onChange={e=>updTier(i,'cost',e.target.value)} placeholder="成本"/>
+                    <input className="input mono" type="number" value={t.price} onChange={e=>updTier(i,'price',e.target.value)} placeholder="售價"/>
+                    <button className="btn btn-ghost btn-sm" onClick={()=>delTier(i)}><Icon name="close" size={12}/></button>
+                  </div>
+                ))}
+                <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>報價填數量時，自動套用「達標的最高一級」；未達最低門檻則用上方售價／成本。</div>
+              </div>
+            )}
+            </div>
           </div>
           {form.price>0 && (
             <div style={{ padding:12, background:'var(--clay-tint)', borderRadius:8, display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, fontSize:12 }}>
@@ -466,7 +537,7 @@ const ProductsView = ({ state, setState }) => {
 // ═══ QUOTES ═══
 const QuotesView = ({ state, setState }) => {
   const [current, setCurrent] = useStateP(emptyQ());
-  const [qItem, setQItem] = useStateP({ name:'', spec:'', qty:1, price:0, cost:0 });
+  const [qItem, setQItem] = useStateP({ name:'', spec:'', qty:1, price:0, cost:0, photo:'' });
   const [previewOpen, setPreviewOpen] = useStateP(false);
   const [listOpen, setListOpen] = useStateP(false);
   const [companyOpen, setCompanyOpen] = useStateP(false);
@@ -499,17 +570,41 @@ const QuotesView = ({ state, setState }) => {
     }));
   }, [current.myco, current.myAddress, current.myTaxId, current.myName, current.myPhone, current.myEmail, current.note]);
 
-  // Auto-fill price/cost when product name matches
-  const pickProduct = (name) => {
-    const p = state.products.find(x => x.name === name);
-    if (p) setQItem(q => ({ ...q, name, spec: p.spec||q.spec, price: p.price||q.price, cost: (p.direct+p.indirect)||q.cost }));
-    else setQItem(q => ({ ...q, name }));
+  // 從指定清單（產品庫或選品配件）帶入，自動套用售價/成本/照片/級距
+  const pickFrom = (list, name) => {
+    const p = (list||[]).find(x => x.name === name);
+    if (!p) { setQItem(q => ({ ...q, name })); return; }
+    const baseCost = (Number(p.direct)||0) + (Number(p.indirect)||0);
+    const tiers = Array.isArray(p.tiers) ? p.tiers : [];
+    setQItem(q => {
+      const tier = tierForQty(tiers, q.qty);
+      return {
+        ...q, name,
+        spec:  p.spec  || q.spec,
+        photo: p.photo || q.photo,
+        tiers, basePrice: Number(p.price)||0, baseCost,
+        price: tier ? tier.price : (Number(p.price)||q.price),
+        cost:  tier ? tier.cost  : (baseCost||q.cost),
+      };
+    });
   };
+  const pickProduct = (name) => pickFrom(state.products, name);
+
+  // 改數量時：若該品項有級距，自動套對應級距的售價／成本（未達門檻回基礎價）
+  const setQItemQty = (v) => setQItem(q => {
+    const next = { ...q, qty: v };
+    if (Array.isArray(q.tiers) && q.tiers.length) {
+      const tier = tierForQty(q.tiers, v);
+      next.price = tier ? tier.price : (q.basePrice != null ? q.basePrice : q.price);
+      next.cost  = tier ? tier.cost  : (q.baseCost  != null ? q.baseCost  : q.cost);
+    }
+    return next;
+  });
 
   const addItem = () => {
     if (!qItem.name) { toast('請填寫品項名稱'); return; }
     setCurrent({...current, items:[...current.items, {...qItem, qty:Number(qItem.qty)||1, price:Number(qItem.price)||0, cost:Number(qItem.cost)||0}]});
-    setQItem({ name:'', spec:'', qty:1, price:0, cost:0 });
+    setQItem({ name:'', spec:'', qty:1, price:0, cost:0, photo:'' });
   };
   const delItem = (i) => setCurrent({...current, items: current.items.filter((_,idx)=>idx!==i)});
 
@@ -596,13 +691,12 @@ const QuotesView = ({ state, setState }) => {
       const sheet = wrap?.querySelector('.quote-a4');
       if (!wrap || !sheet) return;
       const SHEET_W_PX = 794; // 210mm @ ~96dpi
-      const SHEET_H_PX = 1123; // 297mm
       const avail = wrap.parentElement.clientWidth - 4;
       const scale = Math.min(1, avail / SHEET_W_PX);
       sheet.style.transform = `scale(${scale})`;
       sheet.style.transformOrigin = 'top left';
       wrap.style.width = SHEET_W_PX + 'px';
-      wrap.style.height = (SHEET_H_PX * scale) + 'px';
+      wrap.style.height = (sheet.offsetHeight * scale) + 'px'; // 依實際內容高度（長圖自適應）
     };
     const t = setTimeout(fit, 50);
     window.addEventListener('resize', fit);
@@ -697,7 +791,7 @@ const QuotesView = ({ state, setState }) => {
                 <select className="select" value="" onChange={e=>{
                   const name = e.target.value;
                   if (!name) return;
-                  pickProduct(name);
+                  pickFrom(state.products, name);
                   e.target.value = '';
                 }}>
                   <option value="">— 選擇已儲存產品 —</option>
@@ -706,15 +800,39 @@ const QuotesView = ({ state, setState }) => {
                   ))}
                 </select>
               </div>
+              <div className="field" style={{ marginBottom:10 }}>
+                <label>從選品配件帶入（附加項目）</label>
+                <select className="select" value="" onChange={e=>{
+                  const name = e.target.value;
+                  if (!name) return;
+                  pickFrom(state.accessories, name);
+                  e.target.value = '';
+                }}>
+                  <option value="">— 選擇選品配件 —</option>
+                  {(state.accessories||[]).filter(p=>!p._deleted).map(p=>(
+                    <option key={p.id} value={p.name}>{p.name}{p.spec?` · ${p.spec}`:''}</option>
+                  ))}
+                </select>
+              </div>
               <div className="row" style={{ marginBottom:10 }}>
                 <div className="field"><label>品項名稱</label><input className="input" value={qItem.name} onChange={e=>setQItem({...qItem,name:e.target.value})} placeholder="或手動輸入"/></div>
                 <div className="field"><label>規格</label><input className="input" value={qItem.spec} onChange={e=>setQItem({...qItem,spec:e.target.value})}/></div>
               </div>
+              <div className="field" style={{ marginBottom:10 }}><label>商品照片（從產品帶入會自動填入，可換）</label>
+                <PhotoUpload value={qItem.photo} onChange={(url)=>setQItem({...qItem, photo:url})} size={96}/>
+              </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:10 }}>
-                <div className="field" style={{ minWidth:0 }}><label>數量</label><input className="input mono" type="number" value={qItem.qty} onChange={e=>setQItem({...qItem,qty:e.target.value})} style={{ width:'100%' }}/></div>
+                <div className="field" style={{ minWidth:0 }}><label>數量</label><input className="input mono" type="number" value={qItem.qty} onChange={e=>setQItemQty(e.target.value)} style={{ width:'100%' }}/></div>
                 <div className="field" style={{ minWidth:0 }}><label>單價</label><input className="input mono" type="number" value={qItem.price} onChange={e=>setQItem({...qItem,price:e.target.value})} style={{ width:'100%' }}/></div>
                 <div className="field" style={{ minWidth:0 }}><label>成本</label><input className="input mono" type="number" value={qItem.cost} onChange={e=>setQItem({...qItem,cost:e.target.value})} style={{ width:'100%' }}/></div>
               </div>
+              {Array.isArray(qItem.tiers) && qItem.tiers.length>0 && (()=>{
+                const t = tierForQty(qItem.tiers, qItem.qty);
+                return <div style={{ fontSize:11, color:'var(--moss)', marginBottom:6 }}>
+                  {t ? `已套用級距：數量 ≥${t.minQty} → 單價 ${fmtMoney(t.price)}（成本 ${fmtMoney(t.cost)}）`
+                     : `數量未達最低級距，使用基礎售價`}
+                </div>;
+              })()}
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                 <span className="mono" style={{ color:'var(--clay)', fontWeight:700 }}>小計 {fmtMoney(qItem.qty*qItem.price)}</span>
                 <button className="btn btn-ink btn-sm" onClick={addItem}><Icon name="plus" size={12}/> 加入品項</button>
@@ -727,7 +845,10 @@ const QuotesView = ({ state, setState }) => {
                 <tbody>
                   {current.items.map((it,i)=>(
                     <tr key={i}>
-                      <td><div style={{ fontWeight:600 }}>{it.name}</div>{it.spec && <div style={{ fontSize:11, color:'var(--ink-mute)' }}>{it.spec}</div>}</td>
+                      <td><div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        {it.photo && <PhotoThumb url={it.photo} size={36} alt={it.name}/>}
+                        <div><div style={{ fontWeight:600 }}>{it.name}</div>{it.spec && <div style={{ fontSize:11, color:'var(--ink-mute)' }}>{it.spec}</div>}</div>
+                      </div></td>
                       <td className="num">{it.qty}</td>
                       <td className="num">{fmtMoney(it.price)}</td>
                       <td className="num" style={{ fontWeight:700 }}>{fmtMoney(it.qty*it.price)}</td>
@@ -811,10 +932,7 @@ const QuotesView = ({ state, setState }) => {
 };
 
 const QuotePreview = ({ q, subtotal, taxAmt, grand }) => {
-  const MIN_ROWS = 15;
-  const rows = Math.max(q.items.length, MIN_ROWS);
   const taxLabel = `${q.tax || 0}%營業稅`;
-  const ROW_BORDER = '0.3pt solid #ece5d5'; // 淡米色分隔線
   return (
     <div className="quote-a4" style={{
       width:'210mm', minHeight:'297mm', boxSizing:'border-box',
@@ -841,43 +959,39 @@ const QuotePreview = ({ q, subtotal, taxAmt, grand }) => {
         <div><span style={{color:'#7a6f55', letterSpacing:'1pt'}}>編　　號：</span><span style={{fontFamily:"'JetBrains Mono',monospace"}}>{q.num||'　'}</span></div>
       </div>
 
-      {/* Items table */}
-      <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed', marginTop:'1mm', border:'0.5pt solid #1a1a1a' }}>
-        <colgroup>
-          <col style={{ width:'8%' }}/>
-          <col style={{ width:'22%' }}/>
-          <col style={{ width:'30%' }}/>
-          <col style={{ width:'10%' }}/>
-          <col style={{ width:'14%' }}/>
-          <col style={{ width:'16%' }}/>
-        </colgroup>
-        <thead>
-          <tr style={{ background:'#1a1a1a', color:'#fff' }}>
-            <th style={{ padding:'2.5mm 2mm', textAlign:'center', fontSize:'10pt', fontWeight:700, letterSpacing:'2pt' }}>序號</th>
-            <th style={{ padding:'2.5mm 2mm', textAlign:'left',   fontSize:'10pt', fontWeight:700, letterSpacing:'2pt' }}>品　名</th>
-            <th style={{ padding:'2.5mm 2mm', textAlign:'left',   fontSize:'10pt', fontWeight:700, letterSpacing:'2pt' }}>規　格</th>
-            <th style={{ padding:'2.5mm 2mm', textAlign:'right',  fontSize:'10pt', fontWeight:700, letterSpacing:'2pt' }}>數量</th>
-            <th style={{ padding:'2.5mm 2mm', textAlign:'right',  fontSize:'10pt', fontWeight:700, letterSpacing:'2pt' }}>單　價</th>
-            <th style={{ padding:'2.5mm 2mm', textAlign:'right',  fontSize:'10pt', fontWeight:700, letterSpacing:'2pt' }}>金額（未稅）</th>
-          </tr>
-        </thead>
-        <tbody>
-          {Array.from({ length: rows }).map((_, i) => {
-            const it = q.items[i];
-            const zebra = i % 2 === 1 ? '#fbf9f3' : '#fff';
-            return (
-              <tr key={i} style={{ borderBottom: ROW_BORDER, height:'7.5mm', background: zebra }}>
-                <td style={{ padding:'1.6mm 2mm', textAlign:'center', color:'#9a8e75', fontFamily:"'JetBrains Mono',monospace", fontSize:'9.5pt' }}>{String(i+1).padStart(2,'0')}</td>
-                <td style={{ padding:'1.6mm 2mm', fontWeight:600, wordBreak:'break-word' }}>{it?.name||''}</td>
-                <td style={{ padding:'1.6mm 2mm', color:'#444', fontSize:'10pt', wordBreak:'break-word' }}>{it?.spec||''}</td>
-                <td style={{ padding:'1.6mm 2mm', textAlign:'right', fontFamily:"'JetBrains Mono',monospace" }}>{it?it.qty:''}</td>
-                <td style={{ padding:'1.6mm 2mm', textAlign:'right', fontFamily:"'JetBrains Mono',monospace" }}>{it?fmtMoney(it.price):''}</td>
-                <td style={{ padding:'1.6mm 2mm', textAlign:'right', fontFamily:"'JetBrains Mono',monospace", fontWeight:700 }}>{it?fmtMoney(it.qty*it.price):''}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      {/* Items - 圖文卡片式（高度隨品項自適應）*/}
+      <div style={{ marginTop:'1mm' }}>
+        <div style={{ background:'#1a1a1a', color:'#fff', padding:'2mm 3mm', fontSize:'10pt', fontWeight:700, letterSpacing:'3pt', borderRadius:'1.5mm 1.5mm 0 0' }}>報 價 品 項</div>
+        <div style={{ display:'flex', flexDirection:'column', gap:'2.5mm', border:'0.5pt solid #1a1a1a', borderTop:'none', borderRadius:'0 0 1.5mm 1.5mm', padding:'3mm' }}>
+          {q.items.map((it, i) => (
+            <div key={i} style={{
+              display:'flex', alignItems:'stretch', gap:'4mm',
+              border:'0.4pt solid #d8cfb8', borderRadius:'2mm',
+              background: i % 2 === 1 ? '#fbf9f3' : '#fff',
+              padding:'3mm', breakInside:'avoid',
+            }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', width:'7mm', flexShrink:0, color:'#9a8e75', fontFamily:"'JetBrains Mono',monospace", fontSize:'11pt', fontWeight:700 }}>{String(i+1).padStart(2,'0')}</div>
+              <div style={{ width:'32mm', height:'32mm', flexShrink:0, borderRadius:'1.5mm', overflow:'hidden', background:'#f2ede0', border:'0.3pt solid #e0d8c4', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                {it.photo
+                  ? <img src={cldThumb(it.photo, 600)} crossOrigin="anonymous" alt={it.name} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}/>
+                  : <span style={{ color:'#bdb49c', fontSize:'8pt', letterSpacing:'1pt' }}>無照片</span>}
+              </div>
+              <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', justifyContent:'center' }}>
+                <div style={{ fontSize:'13pt', fontWeight:700, color:'#1a1a1a' }}>{it.name||''}</div>
+                {it.spec && <div style={{ fontSize:'10pt', color:'#666', marginTop:'1mm', whiteSpace:'pre-line' }}>{it.spec}</div>}
+                <div style={{ fontSize:'10pt', color:'#555', marginTop:'1.5mm', fontFamily:"'JetBrains Mono',monospace" }}>數量 {it.qty} × {fmtMoney(it.price)}</div>
+              </div>
+              <div style={{ alignSelf:'center', textAlign:'right', flexShrink:0, minWidth:'26mm' }}>
+                <div style={{ fontSize:'8.5pt', color:'#999', letterSpacing:'1pt' }}>金額（未稅）</div>
+                <div style={{ fontSize:'13pt', fontWeight:700, fontFamily:"'JetBrains Mono',monospace", color:'#1a1a1a' }}>{fmtMoney(it.qty*it.price)}</div>
+              </div>
+            </div>
+          ))}
+          {q.items.length === 0 && (
+            <div style={{ padding:'12mm', textAlign:'center', color:'#bbb', fontSize:'10pt' }}>尚無品項</div>
+          )}
+        </div>
+      </div>
 
       {/* Totals (right-aligned) */}
       <div style={{ marginLeft:'auto', width:'52%', marginTop:'2mm' }}>

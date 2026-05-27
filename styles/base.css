@@ -97,6 +97,7 @@ input, select, textarea { font-family: inherit; color: inherit; }
   padding: 28px 32px 40px;
   max-width: var(--content-max);
   width: 100%;
+  zoom: 0.9;   /* 全站內容等比縮小，文字看起來更精緻緊湊 */
 }
 .topbar {
   display:flex; align-items:flex-end; justify-content:space-between;
@@ -226,9 +227,9 @@ input, select, textarea { font-family: inherit; color: inherit; }
   }
 }
 
-/* ═══ Stock Grid (桌機 6 欄，手機 2 欄) ═══ */
-.stock-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
-@media (max-width: 900px) { .stock-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
+/* ═══ Stock Grid (每欄至少 220px，依視窗自動增減欄數，避免擠壓) ═══ */
+.stock-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+@media (max-width: 480px) { .stock-grid { grid-template-columns: 1fr; } }
 
 /* ═══ 文字 view 行排版 ═══ */
 .text-row { display:flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid var(--rule-soft); border-radius:8px; font-size:13px; flex-wrap:wrap; }
@@ -350,6 +351,9 @@ input, select, textarea { font-family: inherit; color: inherit; }
 }
 
 /* ═══ Mobile ═══ */
+/* 報價單等 2:1 版面（桌機兩欄；≤900px 由下方 media 改單欄並補間距）*/
+.grid-2-1-p { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr); gap: 16px; align-items: start; }
+
 .mobile-topbar, .mobile-nav, .mobile-menu { display: none; }
 
 @media (max-width: 900px) {

@@ -15,9 +15,12 @@ const NAV = [
     { key:'channels', label:'通路管理', icon:'channel' },
   ]},
   { group:'資源', items:[
-    { key:'finance', label:'收支控管', icon:'finance' },
     { key:'inventory', label:'庫存管理', icon:'inventory' },
     { key:'product', label:'產品成本', icon:'product' },
+    { key:'accessory', label:'選品配件', icon:'product' },
+  ]},
+  { group:'財務', items:[
+    { key:'finance', label:'收支控管', icon:'finance' },
   ]},
   { group:'系統', items:[
     { key:'settings', label:'設定 · 回收桶', icon:'settings' },
@@ -30,7 +33,7 @@ const TRASH_MS = TRASH_DAYS * 86400 * 1000;
 // Purge soft-deleted items older than TRASH_DAYS
 function purgeOldTrash(state) {
   const now = Date.now();
-  const colls = ['orders','finances','stocks','products','customers','quotes','channels','tasks','logs'];
+  const colls = ['orders','finances','stocks','products','accessories','customers','quotes','channels','tasks','logs'];
   colls.forEach(k => {
     if (Array.isArray(state[k])) {
       state[k] = state[k].filter(x => !x._deleted || (now - x._deleted < TRASH_MS));
@@ -249,6 +252,7 @@ function App(){
       case 'finance': return <FinanceView {...pageProps}/>;
       case 'inventory': return <InventoryView {...pageProps}/>;
       case 'product': return <ProductsView {...pageProps}/>;
+      case 'accessory': return <ProductsView {...pageProps} coll="accessories" viewTitle="選品配件" itemLabel="配件" showCostsTab={false}/>;
       case 'quote': return <QuotesView {...pageProps}/>;
       case 'crm': return <CRMView {...pageProps}/>;
       case 'channels': return <ChannelsView {...pageProps}/>;

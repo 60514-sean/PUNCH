@@ -10,6 +10,7 @@ const SEED = {
   finances: [],
   stocks: [],
   products: [],
+  accessories: [],
   customers: [],
   tasks: [],
   quotes: [],
