@@ -14,6 +14,7 @@ function tierForQty(tiers, qty) {
 const ProductsView = ({ state, setState, coll='products', sectionLabel='資源', viewTitle='產品成本分析', itemLabel='產品', showCostsTab=true }) => {
   const [tab, setTab] = useStateP('saved'); // saved | costs
   const [viewMode, setViewMode] = useStateP('grid'); // list | grid
+  const [photoView, setPhotoView] = useStateP(''); // 點縮圖放大
   const [q, setQ] = useStateP('');
   const [modalOpen, setModalOpen] = useStateP(false);
   const [editingId, setEditingId] = useStateP(null);
@@ -215,39 +216,80 @@ const ProductsView = ({ state, setState, coll='products', sectionLabel='資源',
               })}
             </div>
           )}
-          {viewMode === 'list' && (
-            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {viewMode === 'list' && <>
+            <table className="tbl desk-only">
+              <thead><tr>
+                <th>{itemLabel}</th>
+                <th style={{textAlign:'right'}}>總成本</th>
+                <th style={{textAlign:'right'}}>售價</th>
+                <th style={{textAlign:'right'}}>毛利 / 淨利</th>
+                <th style={{ width:60 }}></th>
+              </tr></thead>
+              <tbody>
+                {filtered.map(p => {
+                  const tc = p.direct + p.indirect;
+                  const gross = p.price ? Math.round((p.price-p.direct)/p.price*100) : 0;
+                  const net = p.price ? Math.round((p.price-tc)/p.price*100) : 0;
+                  return (
+                    <tr key={p.id}>
+                      <td>
+                        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                          <PhotoThumb url={p.photo} size={64} alt={p.name} onClick={()=>p.photo && setPhotoView(p.photo)}/>
+                          <div style={{ minWidth:0 }}>
+                            <div style={{ fontWeight:600 }}>{p.name}</div>
+                            {p.spec && <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>{p.spec}</div>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="num">{fmtMoney(Math.round(tc))}</td>
+                      <td className="num" style={{ fontWeight:700, color:'var(--clay)' }}>{fmtMoney(p.price)}</td>
+                      <td className="num" style={{ fontSize:12, fontWeight:700 }}>
+                        <span style={{ color:'var(--sage)' }}>{gross}%</span>
+                        <span style={{ color:'var(--ink-mute)', fontWeight:400 }}> / </span>
+                        <span style={{ color:'var(--clay)' }}>{net}%</span>
+                      </td>
+                      <td>
+                        <div style={{ display:'flex', gap:4, justifyContent:'flex-end' }}>
+                          <button className="btn btn-ghost btn-sm" title="編輯" onClick={()=>openEdit(p)}><Icon name="edit" size={12}/></button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div className="mob-cards">
               {filtered.map(p => {
                 const tc = p.direct + p.indirect;
                 const gross = p.price ? Math.round((p.price-p.direct)/p.price*100) : 0;
                 const net = p.price ? Math.round((p.price-tc)/p.price*100) : 0;
                 return (
-                  <div key={p.id} style={{ border:'1px solid var(--rule-soft)', borderRadius:10, padding:'12px 14px', cursor:'pointer', display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }} onClick={()=>openEdit(p)}>
-                    <div style={{ flex:'1 1 160px', minWidth:0 }}>
-                      <div style={{ fontSize:14, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
-                      {p.spec && <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.spec}</div>}
-                    </div>
-                    <div className="mono" style={{ flexShrink:0, textAlign:'right', minWidth:60 }}>
-                      <div className="eyebrow">總成本</div>
-                      <div style={{ fontSize:13, fontWeight:600 }}>{fmtMoney(Math.round(tc))}</div>
-                    </div>
-                    <div className="mono" style={{ flexShrink:0, textAlign:'right', minWidth:60 }}>
-                      <div className="eyebrow">售價</div>
-                      <div style={{ fontSize:15, fontWeight:700, color:'var(--clay)' }}>{fmtMoney(p.price)}</div>
-                    </div>
-                    <div className="mono" style={{ flexShrink:0, textAlign:'right', minWidth:90 }}>
-                      <div className="eyebrow">毛利 / 淨利</div>
-                      <div style={{ fontSize:12, fontWeight:700 }}>
-                        <span style={{ color:'var(--sage)' }}>{gross}%</span>
-                        <span style={{ color:'var(--ink-mute)', fontWeight:400 }}> / </span>
-                        <span style={{ color:'var(--clay)' }}>{net}%</span>
+                  <div key={p.id} className="mob-card" style={{ cursor:'default' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                      <PhotoThumb url={p.photo} size={88} alt={p.name} onClick={()=>p.photo && setPhotoView(p.photo)}/>
+                      <div style={{ minWidth:0, flex:1 }}>
+                        <div style={{ fontSize:14, fontWeight:700 }}>{p.name}</div>
+                        {p.spec && <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>{p.spec}</div>}
+                        <div className="mono" style={{ marginTop:6, display:'flex', alignItems:'baseline', gap:6 }}>
+                          <span style={{ fontSize:12, color:'var(--ink-mute)' }}>成本</span>
+                          <span style={{ fontSize:14, fontWeight:700 }}>{fmtMoney(Math.round(tc))}</span>
+                          <span style={{ flex:1 }}/>
+                          <span style={{ fontSize:20, fontWeight:700, color:'var(--clay)' }}>{fmtMoney(p.price)}</span>
+                        </div>
                       </div>
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:10, paddingTop:8, borderTop:'1px dashed var(--rule-soft)' }}>
+                      <span style={{ fontSize:12 }}><span className="muted">毛利 </span><strong className="mono" style={{ color:'var(--sage)' }}>{gross}%</strong></span>
+                      <span style={{ fontSize:12 }}><span className="muted">淨利 </span><strong className="mono" style={{ color:'var(--clay)' }}>{net}%</strong></span>
+                      {p.minPrice>0 && <span style={{ fontSize:11, color:'var(--ink-mute)' }}>底價 {fmtMoney(p.minPrice)}</span>}
+                      <div style={{ flex:1 }}/>
+                      <button className="btn btn-ghost btn-sm" title="編輯" onClick={()=>openEdit(p)}><Icon name="edit" size={11}/></button>
                     </div>
                   </div>
                 );
               })}
             </div>
-          )}
+          </>}
           {viewMode === 'text' && (
             <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
               {[...filtered].sort((a,b)=>(a.name||'').localeCompare(b.name||'','zh-Hant',{ numeric:true, sensitivity:'base' })).map(p => {
@@ -275,6 +317,7 @@ const ProductsView = ({ state, setState, coll='products', sectionLabel='資源',
             </div>
           )}
           {filtered.length===0 && <EmptyState icon="product" title={q?('查無符合'+itemLabel):('尚無'+itemLabel)}/>}
+          <PhotoLightbox url={photoView} onClose={()=>setPhotoView('')}/>
         </div>
         );
       })()}

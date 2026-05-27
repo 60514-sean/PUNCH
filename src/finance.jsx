@@ -255,10 +255,11 @@ const InventoryView = ({ state, setState }) => {
   const [adjOpen, setAdjOpen] = useStateF(false);
   const [editingId, setEditingId] = useStateF(null);
   const [form, setForm] = useStateF({ id:'', kind:'goods', name:'', cat:'', unit:'', qty:'', min:'', price:'', photo:'', note:'', loc:'' });
-  const [adj, setAdj] = useStateF({ id:'', name:'', current:0, type:'add', qty:'', note:'' });
+  const [adj, setAdj] = useStateF({ id:'', name:'', current:0, type:'add', qty:'', note:'', date: new Date().toISOString().slice(0,10) });
   const [noteView, setNoteView] = useStateF(null); // 點圖示要看的品項
   const [viewMode, setViewMode] = useStateF('list'); // list | grid
   const [photoView, setPhotoView] = useStateF(''); // 點縮圖放大要看的 URL
+  const [logEdit, setLogEdit] = useStateF(null); // 正在編輯日期的進出貨紀錄
 
   const openNew = () => {
     const defKind = KIND_VALUES.includes(tab) ? tab : 'goods';
@@ -266,24 +267,38 @@ const InventoryView = ({ state, setState }) => {
     setEditingId(null); setModalOpen(true);
   };
   const openEdit = (s) => { setForm({...s}); setEditingId(s.id); setModalOpen(true); };
-  const openAdj = (s) => { setAdj({ id:s.id, name:s.name, current:s.qty, type:'add', qty:'', note:'' }); setAdjOpen(true); };
+  const openAdj = (s) => { setAdj({ id:s.id, name:s.name, current:s.qty, type:'add', qty:'', note:'', date: new Date().toISOString().slice(0,10) }); setAdjOpen(true); };
 
   const save = () => {
     if (!form.name) { toast('請填寫名稱'); return; }
-    const rec = { ...form, qty: Number(form.qty)||0, min: Number(form.min)||0, price: Number(form.price)||0, updated: new Date().toISOString().slice(0,10) };
-    if (editingId) setState(s=>({ ...s, stocks: s.stocks.map(x=>x.id===editingId?rec:x) }));
-    else setState(s=>({ ...s, stocks: [{...rec, id:uid()}, ...s.stocks] }));
+    const today = new Date().toISOString().slice(0,10);
+    const rec = { ...form, qty: Number(form.qty)||0, min: Number(form.min)||0, price: Number(form.price)||0, updated: today };
+    if (editingId) {
+      setState(s=>({ ...s, stocks: s.stocks.map(x=>x.id===editingId?rec:x) }));
+    } else {
+      const newId = uid();
+      const log = { id: uid(), stockId: newId, name: rec.name, type:'new', qty: rec.qty, note:'新增品項', date: today };
+      setState(s=>({ ...s, stocks: [{...rec, id:newId}, ...s.stocks], logs: [log, ...s.logs] }));
+    }
     toast(editingId?'已更新':'已新增');
     setModalOpen(false);
   };
   const del = () => {
     if (!confirm('刪除此品項？將移至回收桶（保留 10 天）。')) return;
-    setState(s=> window.softDel(s, 'stocks', editingId));
+    const today = new Date().toISOString().slice(0,10);
+    setState(s=>{
+      const target = s.stocks.find(x=>x.id===editingId);
+      const ns = window.softDel(s, 'stocks', editingId);
+      if (!target) return ns;
+      const log = { id: uid(), stockId: editingId, name: target.name, type:'del', qty: target.qty, note:'刪除品項', date: today };
+      return { ...ns, logs: [log, ...ns.logs] };
+    });
     setModalOpen(false); toast('已移至回收桶');
   };
   const saveAdj = () => {
     const q = Number(adj.qty)||0;
     if (!q && adj.type!=='set') { toast('請輸入數量'); return; }
+    const adjDate = adj.date || new Date().toISOString().slice(0,10);
     setState(s=>{
       const newStocks = s.stocks.map(x=>{
         if (x.id!==adj.id) return x;
@@ -291,18 +306,50 @@ const InventoryView = ({ state, setState }) => {
         if (adj.type==='add') nq = x.qty + q;
         else if (adj.type==='sub') nq = Math.max(0, x.qty - q);
         else nq = q;
-        return { ...x, qty: nq, updated: new Date().toISOString().slice(0,10) };
+        return { ...x, qty: nq, updated: adjDate };
       });
       const log = {
         id: uid(), stockId: adj.id, name: adj.name,
         type: adj.type==='sub'?'out': (adj.type==='add'?'in':'adj'),
-        qty: q, note: adj.note, date: new Date().toISOString().slice(0,10),
+        qty: q, note: adj.note, date: adjDate,
       };
       return { ...s, stocks: newStocks, logs: [log, ...s.logs] };
     });
     toast('庫存已更新');
     setAdjOpen(false);
   };
+  const saveLogEdit = () => {
+    if (!logEdit) return;
+    setState(s=>({ ...s, logs: s.logs.map(x=> x.id===logEdit.id ? { ...x, date: logEdit.date, note: logEdit.note } : x) }));
+    toast('紀錄已更新');
+    setLogEdit(null);
+  };
+  const delLog = () => {
+    if (!logEdit) return;
+    const l = logEdit;
+    const restorable = l.type==='in' || l.type==='new' || l.type==='out';
+    const msg = restorable
+      ? '刪除此筆紀錄並還原庫存數量？'
+      : (l.type==='adj' ? '刪除此筆盤點紀錄？（盤點無原值，庫存不會還原）' : '刪除此筆紀錄？');
+    if (!confirm(msg)) return;
+    setState(s=>{
+      let stocks = s.stocks;
+      if (l.type==='in' || l.type==='new') {
+        stocks = s.stocks.map(x=> x.id===l.stockId ? { ...x, qty: Math.max(0, x.qty - (Number(l.qty)||0)) } : x);
+      } else if (l.type==='out') {
+        stocks = s.stocks.map(x=> x.id===l.stockId ? { ...x, qty: x.qty + (Number(l.qty)||0) } : x);
+      }
+      return { ...s, stocks, logs: s.logs.filter(x=>x.id!==l.id) };
+    });
+    toast(restorable ? '已刪除，庫存已還原' : '已刪除紀錄');
+    setLogEdit(null);
+  };
+  const logMeta = (t) =>
+      t==='in'  ? { label:'進貨', tone:'sage',      sign:'+', plus:true }
+    : t==='out' ? { label:'出貨', tone:'terracotta', sign:'-', plus:false }
+    : t==='new' ? { label:'新增', tone:'sage',      sign:'+', plus:true }
+    : t==='del' ? { label:'刪除', tone:'terracotta', sign:'-', plus:false }
+    :             { label:'盤點', tone:'ochre',      sign:'',  plus:false };
 
   const allStocks = state.stocks.filter(x => !x._deleted);
   const items = allStocks.filter(x => {
@@ -359,43 +406,45 @@ const InventoryView = ({ state, setState }) => {
           <table className="tbl desk-only">
             <thead><tr><th>日期</th><th>品項</th><th>類型</th><th style={{textAlign:'right'}}>數量</th><th>備註</th></tr></thead>
             <tbody>
-              {state.logs.map(l=>(
-                <tr key={l.id}>
+              {state.logs.map(l=>{
+                const m = logMeta(l.type);
+                return (
+                <tr key={l.id} style={{ cursor:'pointer' }} onClick={()=>setLogEdit({...l})}>
                   <td className="mono" style={{ fontSize:12, color:'var(--ink-mute)' }}>{fmtDateFull(l.date)}</td>
                   <td style={{ fontWeight:600 }}>{l.name}</td>
                   <td>
-                    <Pill tone={l.type==='in'?'sage':l.type==='out'?'terracotta':'ochre'}>
-                      {l.type==='in'?'進貨':l.type==='out'?'出貨':'盤點'}
-                    </Pill>
+                    <Pill tone={m.tone}>{m.label}</Pill>
                   </td>
-                  <td className="num" style={{ fontWeight:700, color: l.type==='in'?'var(--moss)':'var(--terracotta)' }}>
-                    {l.type==='in'?'+':l.type==='out'?'-':''}{l.qty}
+                  <td className="num" style={{ fontWeight:700, color: m.plus?'var(--moss)':'var(--terracotta)' }}>
+                    {m.sign}{l.qty}
                   </td>
                   <td style={{ fontSize:12, color:'var(--ink-soft)' }}>{l.note}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
           <div className="mob-cards">
-            {state.logs.map(l=>(
-              <div key={l.id} className="mob-card" style={{ cursor:'default' }}>
+            {state.logs.map(l=>{
+              const m = logMeta(l.type);
+              return (
+              <div key={l.id} className="mob-card" style={{ cursor:'pointer' }} onClick={()=>setLogEdit({...l})}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
                   <div style={{ minWidth:0, flex:1 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
-                      <Pill tone={l.type==='in'?'sage':l.type==='out'?'terracotta':'ochre'}>
-                        {l.type==='in'?'進貨':l.type==='out'?'出貨':'盤點'}
-                      </Pill>
+                      <Pill tone={m.tone}>{m.label}</Pill>
                       <span className="mono" style={{ fontSize:10, color:'var(--ink-mute)' }}>{fmtDateFull(l.date)}</span>
                     </div>
                     <div style={{ fontSize:13, fontWeight:600 }}>{l.name}</div>
                     {l.note && <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:3 }}>{l.note}</div>}
                   </div>
-                  <div className="mono" style={{ fontSize:16, fontWeight:700, color: l.type==='in'?'var(--moss)':'var(--terracotta)' }}>
-                    {l.type==='in'?'+':l.type==='out'?'-':''}{l.qty}
+                  <div className="mono" style={{ fontSize:16, fontWeight:700, color: m.plus?'var(--moss)':'var(--terracotta)' }}>
+                    {m.sign}{l.qty}
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : (
@@ -612,8 +661,36 @@ const InventoryView = ({ state, setState }) => {
             </div>
             <div className="field"><label>數量</label><input className="input mono" type="number" value={adj.qty} onChange={e=>setAdj({...adj,qty:e.target.value})}/></div>
           </div>
-          <div className="field"><label>備註</label><input className="input" value={adj.note} onChange={e=>setAdj({...adj,note:e.target.value})} placeholder="進出貨說明"/></div>
+          <div className="row">
+            <div className="field"><label>日期</label><input className="input" type="date" value={adj.date} onChange={e=>setAdj({...adj,date:e.target.value})}/></div>
+            <div className="field"><label>備註</label><input className="input" value={adj.note} onChange={e=>setAdj({...adj,note:e.target.value})} placeholder="進出貨說明"/></div>
+          </div>
         </div>
+      </Modal>
+
+      {/* Edit log (調整進出貨日期) */}
+      <Modal open={!!logEdit} onClose={()=>setLogEdit(null)} title="編輯進出貨紀錄"
+        footer={<>
+          <button className="btn btn-danger" onClick={delLog}><Icon name="trash" size={13}/> 刪除</button>
+          <div style={{ flex:1 }}/>
+          <button className="btn btn-ghost" onClick={()=>setLogEdit(null)}>取消</button>
+          <button className="btn btn-primary" onClick={saveLogEdit}>確認</button>
+        </>}>
+        {logEdit && <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <div style={{ padding:'12px 16px', background:'var(--paper-deep)', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+            <div style={{ minWidth:0 }}>
+              <div className="eyebrow" style={{ marginBottom:4 }}>{logEdit.name}</div>
+              <Pill tone={logMeta(logEdit.type).tone}>{logMeta(logEdit.type).label}</Pill>
+            </div>
+            <div className="mono" style={{ fontSize:20, fontWeight:700, color: logMeta(logEdit.type).plus?'var(--moss)':'var(--terracotta)' }}>
+              {logMeta(logEdit.type).sign}{logEdit.qty}
+            </div>
+          </div>
+          <div className="row">
+            <div className="field"><label>日期</label><input className="input" type="date" value={logEdit.date} onChange={e=>setLogEdit({...logEdit,date:e.target.value})}/></div>
+            <div className="field"><label>備註</label><input className="input" value={logEdit.note||''} onChange={e=>setLogEdit({...logEdit,note:e.target.value})}/></div>
+          </div>
+        </div>}
       </Modal>
 
       {/* View note */}
