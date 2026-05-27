@@ -352,6 +352,7 @@ const InventoryView = ({ state, setState }) => {
     :             { label:'盤點', tone:'ochre',      sign:'',  plus:false };
 
   const allStocks = state.stocks.filter(x => !x._deleted);
+  const sortedLogs = [...state.logs].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const items = allStocks.filter(x => {
     const matchTab = (tab==='all' || tab==='logs') ? true
                     : tab==='alert' ? (x.qty <= x.min)
@@ -406,7 +407,7 @@ const InventoryView = ({ state, setState }) => {
           <table className="tbl desk-only">
             <thead><tr><th>日期</th><th>品項</th><th>類型</th><th style={{textAlign:'right'}}>數量</th><th>備註</th></tr></thead>
             <tbody>
-              {state.logs.map(l=>{
+              {sortedLogs.map(l=>{
                 const m = logMeta(l.type);
                 return (
                 <tr key={l.id} style={{ cursor:'pointer' }} onClick={()=>setLogEdit({...l})}>
@@ -425,7 +426,7 @@ const InventoryView = ({ state, setState }) => {
             </tbody>
           </table>
           <div className="mob-cards">
-            {state.logs.map(l=>{
+            {sortedLogs.map(l=>{
               const m = logMeta(l.type);
               return (
               <div key={l.id} className="mob-card" style={{ cursor:'pointer' }} onClick={()=>setLogEdit({...l})}>
