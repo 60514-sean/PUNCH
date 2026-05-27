@@ -95,6 +95,16 @@ function writeSheet(ss, name, items) {
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
   sheet.setFrozenRows(1);
+  // 防復發：凡是「整欄都是數字（或空）」的欄位，鎖定純數字格式，
+  // 避免 Sheets 把 0,1,2… 自動誤判成日期，造成讀回來變 Date。
+  headers.forEach((h, i) => {
+    const vals = items.map(it => it[h]);
+    const hasNum = vals.some(v => typeof v === 'number');
+    const allNumOrEmpty = vals.every(v => v == null || v === '' || typeof v === 'number');
+    if (hasNum && allNumOrEmpty) {
+      sheet.getRange(2, i + 1, rows.length, 1).setNumberFormat('0.######');
+    }
+  });
 }
 
 function readMeta(ss) {
@@ -157,6 +167,58 @@ function fail(msg) {
 // ─── 一次性遷移：從舊 GAS URL 抓資料寫進此 sheet 各分頁 ───
 // 部署完之後，在 Apps Script 編輯器手動執行一次 migrateFromOldUrl()
 const OLD_GAS_URL = 'https://script.google.com/macros/s/AKfycbx5uFoCCU9X5czLKzXHOm3WRXuyCozGg2xfIuuLQ06xSxcz-Bq-QgNpIpjXrD9FbFjOlQ/exec';
+
+// ─── 一次性修復：把被誤判為「日期」的數字欄還原成數字 ───
+// 症狀：庫存/底線顯示成 1900-01-02、1899-12-24T16:00:00.000Z 之類的日期。
+// 原因：該欄被當成日期。Sheets 內部以序列號存數字（1899-12-30 為第 0 天），
+//       一旦格子是日期格式，數字 3 就顯示成 1900-01-02、0 顯示成 1899-12-30 前後。
+// 修法：讀回原始值 → 反推序列號還原成數字 → 寫回 + 鎖定數字格式。
+// 用法：在 Apps Script 編輯器選此函式按「執行」一次，之後前端重新整理即可。
+const SHEETS_EPOCH = Date.UTC(1899, 11, 30); // Sheets 序列號第 0 天
+
+function cellToNumber(v) {
+  if (v === '' || v == null) return null;          // 留空，不動
+  if (typeof v === 'number') return v;             // 已是數字
+  let d = (v instanceof Date) ? v : null;
+  if (!d && typeof v === 'string') {
+    const m = v.match(/^(\d{4})-(\d{2})-(\d{2})/); // 日期或 ISO 時間戳開頭
+    if (m) d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    else { const n = Number(v); return isNaN(n) ? null : n; }
+  }
+  if (d) {
+    const serial = Math.round((d.getTime() - SHEETS_EPOCH) / 86400000);
+    return serial < 0 ? 0 : serial;               // 緊鄰 epoch 的（庫存 0）夾成 0
+  }
+  return null;
+}
+
+function fixStockNumbers() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const NUM_COLS = { stocks: ['qty', 'min', 'price'] };
+  const report = [];
+  Object.keys(NUM_COLS).forEach(name => {
+    const sheet = ss.getSheetByName(name);
+    if (!sheet || sheet.getLastRow() < 2) return;
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    NUM_COLS[name].forEach(key => {
+      const col = headers.indexOf(key) + 1;
+      if (col <= 0) return;
+      const rng = sheet.getRange(2, col, sheet.getLastRow() - 1, 1);
+      const vals = rng.getValues();
+      let changed = 0;
+      const out = vals.map(([v]) => {
+        const n = cellToNumber(v);
+        if (n !== null && n !== v) changed++;
+        return [n === null ? '' : n];
+      });
+      rng.setNumberFormat('0.######');
+      rng.setValues(out);
+      report.push(name + '.' + key + '(' + changed + ')');
+    });
+  });
+  SpreadsheetApp.flush();
+  Logger.log('已修復：' + report.join(', '));
+}
 
 function migrateFromOldUrl() {
   const r = UrlFetchApp.fetch(OLD_GAS_URL, { muteHttpExceptions: true });
