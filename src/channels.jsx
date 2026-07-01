@@ -63,7 +63,7 @@ function allItemPairsCH(state, channelId) {
   return Array.from(map.values());
 }
 
-// ─── 業績金額固定含稅（5% 營業稅），利潤 = 未稅業績 − 進貨成本 − 通路抽成 ───
+// ─── 業績金額固定含稅（5% 營業稅）。抽成用含稅業績金額計算，利潤 = 未稅業績 − 進貨成本 − 通路抽成 ───
 const VAT_RATE = 5;
 const untaxCH = (amt) => (Number(amt)||0) / (1 + VAT_RATE/100);
 
@@ -87,7 +87,7 @@ function productSellPrice(state, stockName) {
 function calcSaleProfit(channel, qty, revenue, unitCost) {
   const untaxed = untaxCH(revenue);
   const cost = (Number(qty)||0) * (Number(unitCost)||0);
-  const fee = channel.fee_unit==='%' ? untaxed * (Number(channel.fee)||0)/100 : (Number(qty)||0) * (Number(channel.fee)||0);
+  const fee = channel.fee_unit==='%' ? (Number(revenue)||0) * (Number(channel.fee)||0)/100 : (Number(qty)||0) * (Number(channel.fee)||0);
   const profit = untaxed - cost - fee;
   return { untaxed, cost, fee, profit };
 }
