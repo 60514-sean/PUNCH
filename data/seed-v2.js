@@ -15,6 +15,9 @@ const SEED = {
   tasks: [],
   quotes: [],
   channels: [],
+  channelStock: [],
+  channelRestocks: [],
+  channelSales: [],
   logs: [],
   monthMethods: [],
   weekPlan: [[],[],[],[],[],[],[]],
@@ -160,6 +163,25 @@ const DEMO_SEED = {
     { id:'ch4', name:'實體快閃櫃(誠品)', type:'pop-up', fee:28, fee_unit:'%', sales:26400, orders:5, note:'每季巡迴，抽成較高', active:true },
     { id:'ch5', name:'B2B 批發', type:'wholesale', fee:0, fee_unit:'%', sales:54200, orders:3, note:'選品店批發，售價為一般 7 折', active:true },
     { id:'ch6', name:'IG 私訊下單', type:'direct', fee:0, fee_unit:'%', sales:14200, orders:8, note:'熟客管道，匯款無手續費', active:true },
+  ],
+  channelStock: [
+    { id:'cs1', channelId:'ch2', stockId:'g1', name:'手捏青瓷對杯', qty:5 },
+    { id:'cs2', channelId:'ch2', stockId:'g2', name:'亞麻方巾(米色)', qty:8 },
+    { id:'cs3', channelId:'ch4', stockId:'g3', name:'陶土手沖濾杯', qty:2 },
+  ],
+  channelRestocks: [
+    { id:'cr1', channelId:'ch2', stockId:'g1', name:'手捏青瓷對杯', qty:8, cost:6720, date:'2026-02-10', note:'月初補貨' },
+    { id:'cr2', channelId:'ch2', stockId:'g1', name:'手捏青瓷對杯', qty:6, cost:5040, date:'2026-03-12', note:'' },
+    { id:'cr3', channelId:'ch2', stockId:'g2', name:'亞麻方巾(米色)', qty:15, cost:3200, date:'2026-03-05', note:'' },
+    { id:'cr4', channelId:'ch4', stockId:'g3', name:'陶土手沖濾杯', qty:6, cost:1560, date:'2026-04-01', note:'快閃市集備貨' },
+  ],
+  channelSales: [
+    { id:'csl1', channelId:'ch2', stockId:'g1', name:'手捏青瓷對杯', month:'2026-02', qty:3, revenue:5040, note:'' },
+    { id:'csl2', channelId:'ch2', stockId:'g1', name:'手捏青瓷對杯', month:'2026-03', qty:4, revenue:6720, note:'' },
+    { id:'csl3', channelId:'ch2', stockId:'g1', name:'手捏青瓷對杯', month:'2026-04', qty:2, revenue:3360, note:'' },
+    { id:'csl4', channelId:'ch2', stockId:'g2', name:'亞麻方巾(米色)', month:'2026-03', qty:5, revenue:2100, note:'' },
+    { id:'csl5', channelId:'ch2', stockId:'g2', name:'亞麻方巾(米色)', month:'2026-04', qty:2, revenue:840, note:'' },
+    { id:'csl6', channelId:'ch4', stockId:'g3', name:'陶土手沖濾杯', month:'2026-04', qty:4, revenue:3920, note:'誠品快閃巡迴' },
   ],
 };
 

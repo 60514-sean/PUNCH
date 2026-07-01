@@ -8,10 +8,472 @@ const CHANNEL_TYPES = [
   { v:'wholesale', l:'批發', tone:'ink' },
 ];
 
+// ─── 季節加權（1 = 平均水準），用於預估下月銷量 ───
+const SEASON_FACTOR = { 1:1.25, 2:1.1, 3:0.95, 4:0.95, 5:1.1, 6:0.9, 7:0.9, 8:0.9, 9:0.95, 10:1.0, 11:1.2, 12:1.35 };
+const seasonFactor = (m) => SEASON_FACTOR[m] || 1;
+
+function ymAddCH(ymStr, delta) {
+  const [y,m] = ymStr.split('-').map(Number);
+  const d = new Date(y, m-1+delta, 1);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+function last6MonthsCH() {
+  const now = new Date();
+  const cur = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const arr = [];
+  for (let i=5;i>=0;i--) arr.push(ymAddCH(cur,-i));
+  return arr;
+}
+const monthLabelCH = (ymStr) => Number(ymStr.split('-')[1]) + '月';
+
+// 依「近 3 個月平均銷量 × 下月季節加權」估算進貨時機與建議數量
+function predictItem(state, channelId, stockId) {
+  const sales = (state.channelSales||[]).filter(x=>!x._deleted && x.channelId===channelId && x.stockId===stockId)
+    .sort((a,b)=>a.month.localeCompare(b.month));
+  if (!sales.length) return null;
+  const recent = sales.slice(-3);
+  const avgQty = recent.reduce((a,b)=>a+(Number(b.qty)||0),0)/recent.length;
+  const avgFactor = recent.reduce((a,b)=>a+seasonFactor(Number(b.month.split('-')[1])),0)/recent.length || 1;
+  const now = new Date();
+  const nextMonthNum = now.getMonth()+2 > 12 ? (now.getMonth()+2-12) : now.getMonth()+2;
+  const predictedQty = avgQty * (seasonFactor(nextMonthNum)/avgFactor);
+  const stockRow = (state.channelStock||[]).find(r=>r.channelId===channelId && r.stockId===stockId);
+  const currentQty = stockRow ? stockRow.qty : 0;
+  const dailyRate = predictedQty/30;
+  const daysLeft = dailyRate>0 ? currentQty/dailyRate : null;
+  const leadDays = 7;
+  const dueInDays = daysLeft==null ? null : Math.max(0, Math.round(daysLeft - leadDays));
+  const restockDate = dueInDays==null ? null : new Date(now.getTime()+dueInDays*86400000).toISOString().slice(0,10);
+  const suggestedQty = Math.max(0, Math.ceil(predictedQty*1.5 - currentQty));
+  return {
+    currentQty,
+    avgQty: Math.round(avgQty*10)/10,
+    predictedQty: Math.round(predictedQty*10)/10,
+    daysLeft: daysLeft==null ? null : Math.round(daysLeft),
+    restockDate,
+    suggestedQty,
+  };
+}
+
+// 某通路（或全部）目前有紀錄過的品項組合
+function allItemPairsCH(state, channelId) {
+  const map = new Map();
+  (state.channelStock||[]).filter(r=>!channelId || r.channelId===channelId).forEach(r=>map.set(r.channelId+'|'+r.stockId, { channelId:r.channelId, stockId:r.stockId }));
+  (state.channelSales||[]).filter(x=>!x._deleted && (!channelId || x.channelId===channelId)).forEach(r=>map.set(r.channelId+'|'+r.stockId, { channelId:r.channelId, stockId:r.stockId }));
+  return Array.from(map.values());
+}
+
+// ═══ 通路詳情：庫存/進貨、月銷售、分析與預判 ═══
+const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
+  const [subTab, setSubTab] = useStateCH('stock'); // stock | sales | analysis
+  const [restockOpen, setRestockOpen] = useStateCH(false);
+  const [restockForm, setRestockForm] = useStateCH({ stockId:'', qty:'', cost:'', date:new Date().toISOString().slice(0,10), note:'' });
+  const [restockEdit, setRestockEdit] = useStateCH(null);
+  const [saleOpen, setSaleOpen] = useStateCH(false);
+  const [saleForm, setSaleForm] = useStateCH({ id:null, stockId:'', month:new Date().toISOString().slice(0,7), qty:'', revenue:'', note:'' });
+
+  const goodsStocks = state.stocks.filter(s=>!s._deleted && s.kind==='goods');
+  const stockRows = (state.channelStock||[]).filter(r=>r.channelId===channel.id);
+  const restocks = (state.channelRestocks||[]).filter(r=>r.channelId===channel.id && !r._deleted).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const sales = (state.channelSales||[]).filter(r=>r.channelId===channel.id && !r._deleted).sort((a,b)=>(b.month||'').localeCompare(a.month||'') || (a.name||'').localeCompare(b.name||''));
+
+  const openRestock = () => { setRestockForm({ stockId: goodsStocks[0]?.id||'', qty:'', cost:'', date:new Date().toISOString().slice(0,10), note:'' }); setRestockOpen(true); };
+  const saveRestock = () => {
+    const stockItem = state.stocks.find(s=>s.id===restockForm.stockId);
+    const qty = Number(restockForm.qty)||0;
+    if (!stockItem) { toast('請選擇品項'); return; }
+    if (!qty) { toast('請輸入數量'); return; }
+    const date = restockForm.date || new Date().toISOString().slice(0,10);
+    setState(s=>{
+      const stocksNext = s.stocks.map(x=> x.id===stockItem.id ? { ...x, qty:Math.max(0,x.qty-qty), updated:date } : x);
+      const warehouseLog = { id:uid(), stockId:stockItem.id, name:stockItem.name, type:'out', qty, note:'出貨至通路：'+channel.name+(restockForm.note?'（'+restockForm.note+'）':''), date };
+      let found = false;
+      let chStock = (s.channelStock||[]).map(r=>{
+        if (r.channelId===channel.id && r.stockId===stockItem.id) { found = true; return { ...r, qty:r.qty+qty }; }
+        return r;
+      });
+      if (!found) chStock = [...chStock, { id:uid(), channelId:channel.id, stockId:stockItem.id, name:stockItem.name, qty }];
+      const restockRec = { id:uid(), channelId:channel.id, stockId:stockItem.id, name:stockItem.name, qty, cost:Number(restockForm.cost)||0, date, note:restockForm.note||'' };
+      return { ...s, stocks: stocksNext, logs:[warehouseLog, ...s.logs], channelStock: chStock, channelRestocks:[restockRec, ...(s.channelRestocks||[])] };
+    });
+    toast('已登記進貨');
+    setRestockOpen(false);
+  };
+  const saveRestockEditFn = () => {
+    if (!restockEdit) return;
+    setState(s=>({ ...s, channelRestocks: (s.channelRestocks||[]).map(x=>x.id===restockEdit.id?{...x, date:restockEdit.date, note:restockEdit.note}:x) }));
+    toast('已更新');
+    setRestockEdit(null);
+  };
+  const deleteRestock = () => {
+    if (!restockEdit) return;
+    if (!confirm('刪除此筆進貨紀錄？將把庫存加回原倉庫。')) return;
+    const rec = restockEdit;
+    setState(s=>{
+      const stocksNext = s.stocks.map(x=> x.id===rec.stockId ? { ...x, qty:x.qty+rec.qty } : x);
+      const chStock = (s.channelStock||[]).map(r=> (r.channelId===rec.channelId && r.stockId===rec.stockId) ? { ...r, qty:Math.max(0,r.qty-rec.qty) } : r);
+      return { ...s, stocks: stocksNext, channelStock: chStock, channelRestocks: (s.channelRestocks||[]).filter(x=>x.id!==rec.id) };
+    });
+    toast('已刪除，庫存已還原');
+    setRestockEdit(null);
+  };
+
+  const openSaleNew = () => { setSaleForm({ id:null, stockId: goodsStocks[0]?.id||'', month:new Date().toISOString().slice(0,7), qty:'', revenue:'', note:'' }); setSaleOpen(true); };
+  const openSaleEdit = (rec) => { setSaleForm({ id:rec.id, stockId:rec.stockId, month:rec.month, qty:rec.qty, revenue:rec.revenue, note:rec.note||'' }); setSaleOpen(true); };
+  const saveSale = () => {
+    const stockItem = state.stocks.find(s=>s.id===saleForm.stockId);
+    if (!stockItem) { toast('請選擇品項'); return; }
+    const qty = Number(saleForm.qty)||0;
+    const revenue = Number(saleForm.revenue)||0;
+    const month = saleForm.month || new Date().toISOString().slice(0,7);
+    setState(s=>{
+      let salesNext = s.channelSales||[];
+      let delta = qty;
+      if (saleForm.id) {
+        const old = salesNext.find(x=>x.id===saleForm.id);
+        delta = qty - (old ? Number(old.qty)||0 : 0);
+        salesNext = salesNext.map(x=> x.id===saleForm.id ? { ...x, qty, revenue, note:saleForm.note||'' } : x);
+      } else {
+        salesNext = [{ id:uid(), channelId:channel.id, stockId:stockItem.id, name:stockItem.name, month, qty, revenue, note:saleForm.note||'' }, ...salesNext];
+      }
+      const chStock = (s.channelStock||[]).map(r=> (r.channelId===channel.id && r.stockId===stockItem.id) ? { ...r, qty:Math.max(0, r.qty-delta) } : r);
+      return { ...s, channelSales: salesNext, channelStock: chStock };
+    });
+    toast(saleForm.id?'已更新':'已新增');
+    setSaleOpen(false);
+  };
+  const handleDeleteSale = () => {
+    if (!saleForm.id) return;
+    if (!confirm('刪除此筆銷售紀錄？將把數量加回通路庫存。')) return;
+    setState(s=>{
+      const chStock = (s.channelStock||[]).map(r=> (r.channelId===channel.id && r.stockId===saleForm.stockId) ? { ...r, qty:r.qty+(Number(saleForm.qty)||0) } : r);
+      return { ...s, channelStock: chStock, channelSales: (s.channelSales||[]).filter(x=>x.id!==saleForm.id) };
+    });
+    toast('已刪除，數量已還原');
+    setSaleOpen(false);
+  };
+
+  const revenueTrend = useMemoCH(()=>{
+    const months = last6MonthsCH();
+    return months.map(m=>({ key:m, label:monthLabelCH(m), value: sales.filter(x=>x.month===m).reduce((a,b)=>a+(Number(b.revenue)||0),0) }));
+  }, [sales]);
+
+  const analysisRows = useMemoCH(()=>{
+    return allItemPairsCH(state, channel.id).map(p=>{
+      const stockItem = state.stocks.find(s=>s.id===p.stockId);
+      const pred = predictItem(state, channel.id, p.stockId);
+      return { stockId:p.stockId, name: stockItem?stockItem.name:'(已刪除品項)', pred };
+    }).filter(r=>r.pred);
+  }, [state, channel.id]);
+
+  const typeTag = CHANNEL_TYPES.find(t=>t.v===channel.type) || CHANNEL_TYPES[0];
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      <div className="topbar">
+        <div className="topbar-l">
+          <button className="btn btn-ghost btn-sm" onClick={onBack} style={{ marginBottom:8 }}><Icon name="chevronLeft" size={14}/> 返回通路列表</button>
+          <div className="eyebrow">通路詳情</div>
+          <h1 className="h1">{channel.name}</h1>
+          <div className="sub"><Pill tone={typeTag.tone}>{typeTag.l}</Pill> · 抽成 {channel.fee}{channel.fee_unit}</div>
+        </div>
+        <div className="topbar-r">
+          <button className="btn btn-ghost btn-sm" onClick={onEdit}><Icon name="edit" size={13}/> 編輯基本資料</button>
+        </div>
+      </div>
+
+      <Segmented options={[{value:'stock',label:'庫存 / 進貨'},{value:'sales',label:'月銷售'},{value:'analysis',label:'分析與預判'}]} value={subTab} onChange={setSubTab}/>
+
+      {subTab==='stock' && (
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">通路庫存</div>
+            <button className="btn btn-primary btn-sm" onClick={openRestock}><Icon name="plus" size={13}/> 登記進貨</button>
+          </div>
+          <table className="tbl desk-only">
+            <thead><tr><th>品項</th><th style={{ textAlign:'right' }}>目前在此通路庫存</th></tr></thead>
+            <tbody>
+              {stockRows.map(r=>(
+                <tr key={r.id}><td style={{ fontWeight:600 }}>{r.name}</td><td className="num" style={{ fontWeight:700 }}>{r.qty}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="mob-cards">
+            {stockRows.map(r=>(
+              <div key={r.id} className="mob-card">
+                <div style={{ display:'flex', justifyContent:'space-between' }}>
+                  <span style={{ fontWeight:600 }}>{r.name}</span>
+                  <span className="mono" style={{ fontWeight:700 }}>{r.qty}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          {stockRows.length===0 && <EmptyState icon="channel" title="尚無進貨紀錄" hint="登記第一筆進貨，開始追蹤此通路庫存"/>}
+
+          <div style={{ marginTop:20, paddingTop:16, borderTop:'1px dashed var(--rule-soft)' }}>
+            <div className="card-title" style={{ marginBottom:10 }}>進貨歷史</div>
+            <table className="tbl desk-only">
+              <thead><tr><th>日期</th><th>品項</th><th style={{ textAlign:'right' }}>數量</th><th style={{ textAlign:'right' }}>成本</th><th>備註</th></tr></thead>
+              <tbody>
+                {restocks.map(r=>(
+                  <tr key={r.id} style={{ cursor:'pointer' }} onClick={()=>setRestockEdit({...r})}>
+                    <td className="mono" style={{ fontSize:12, color:'var(--ink-mute)' }}>{fmtDateFull(r.date)}</td>
+                    <td>{r.name}</td>
+                    <td className="num" style={{ color:'var(--moss)', fontWeight:700 }}>+{r.qty}</td>
+                    <td className="num">{r.cost?fmtMoney(r.cost):'-'}</td>
+                    <td style={{ fontSize:12, color:'var(--ink-soft)' }}>{r.note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="mob-cards">
+              {restocks.map(r=>(
+                <div key={r.id} className="mob-card" style={{ cursor:'pointer' }} onClick={()=>setRestockEdit({...r})}>
+                  <div style={{ display:'flex', justifyContent:'space-between' }}>
+                    <div><div style={{ fontWeight:600 }}>{r.name}</div><div style={{ fontSize:11, color:'var(--ink-mute)' }}>{fmtDateFull(r.date)}</div></div>
+                    <div className="mono" style={{ fontWeight:700, color:'var(--moss)' }}>+{r.qty}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {restocks.length===0 && <div style={{ padding:'12px 0', fontSize:12, color:'var(--ink-mute)' }}>尚無紀錄</div>}
+          </div>
+        </div>
+      )}
+
+      {subTab==='sales' && (
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">每月銷售紀錄（依品項）</div>
+            <button className="btn btn-primary btn-sm" onClick={openSaleNew}><Icon name="plus" size={13}/> 新增月銷售</button>
+          </div>
+          <table className="tbl desk-only">
+            <thead><tr><th>月份</th><th>品項</th><th style={{ textAlign:'right' }}>數量</th><th style={{ textAlign:'right' }}>業績</th><th>備註</th></tr></thead>
+            <tbody>
+              {sales.map(r=>(
+                <tr key={r.id} style={{ cursor:'pointer' }} onClick={()=>openSaleEdit(r)}>
+                  <td className="mono">{monthLabelCH(r.month)} <span style={{ color:'var(--ink-faint)', fontSize:11 }}>{r.month}</span></td>
+                  <td>{r.name}</td>
+                  <td className="num">{r.qty}</td>
+                  <td className="num" style={{ fontWeight:700 }}>{fmtMoney(r.revenue,true)}</td>
+                  <td style={{ fontSize:12, color:'var(--ink-soft)' }}>{r.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="mob-cards">
+            {sales.map(r=>(
+              <div key={r.id} className="mob-card" style={{ cursor:'pointer' }} onClick={()=>openSaleEdit(r)}>
+                <div style={{ display:'flex', justifyContent:'space-between' }}>
+                  <div><div style={{ fontWeight:600 }}>{r.name}</div><div style={{ fontSize:11, color:'var(--ink-mute)' }}>{monthLabelCH(r.month)} · {r.qty} 件</div></div>
+                  <div className="mono" style={{ fontWeight:700 }}>{fmtMoney(r.revenue,true)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {sales.length===0 && <EmptyState icon="finance" title="尚無銷售紀錄" hint="新增本月的品項銷售資料"/>}
+        </div>
+      )}
+
+      {subTab==='analysis' && (
+        <>
+          <div className="card">
+            <div className="card-head"><div className="card-title">近 6 個月業績趨勢</div></div>
+            <Sparkline data={revenueTrend.map(m=>m.value)} labels={revenueTrend.map(m=>m.label)} color="var(--clay)"/>
+          </div>
+          <div className="card">
+            <div className="card-head"><div className="card-title">品項進貨預判</div><div className="card-subtle">依近 3 月銷量與季節指數估算</div></div>
+            <table className="tbl desk-only">
+              <thead><tr><th>品項</th><th style={{ textAlign:'right' }}>目前庫存</th><th style={{ textAlign:'right' }}>近3月均銷</th><th style={{ textAlign:'right' }}>預估下月銷量</th><th style={{ textAlign:'right' }}>可撐天數</th><th style={{ textAlign:'right' }}>建議進貨量</th><th>建議進貨日</th></tr></thead>
+              <tbody>
+                {analysisRows.map(r=>(
+                  <tr key={r.stockId}>
+                    <td style={{ fontWeight:600 }}>{r.name}</td>
+                    <td className="num">{r.pred.currentQty}</td>
+                    <td className="num">{r.pred.avgQty}</td>
+                    <td className="num">{r.pred.predictedQty}</td>
+                    <td className="num" style={{ color: r.pred.daysLeft!=null && r.pred.daysLeft<=14 ? 'var(--terracotta)':'var(--ink)' }}>{r.pred.daysLeft==null?'--':r.pred.daysLeft+' 天'}</td>
+                    <td className="num" style={{ fontWeight:700 }}>{r.pred.suggestedQty}</td>
+                    <td className="mono" style={{ fontSize:12 }}>{r.pred.restockDate?fmtDateFull(r.pred.restockDate):'--'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="mob-cards">
+              {analysisRows.map(r=>(
+                <div key={r.stockId} className="mob-card">
+                  <div style={{ fontWeight:700, marginBottom:6 }}>{r.name}</div>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, fontSize:12 }}>
+                    <div className="muted">目前庫存 <b>{r.pred.currentQty}</b></div>
+                    <div className="muted">近3月均銷 <b>{r.pred.avgQty}</b></div>
+                    <div className="muted">可撐天數 <b style={{ color: r.pred.daysLeft!=null && r.pred.daysLeft<=14?'var(--terracotta)':undefined }}>{r.pred.daysLeft==null?'--':r.pred.daysLeft+'天'}</b></div>
+                    <div className="muted">建議進貨 <b>{r.pred.suggestedQty}</b></div>
+                  </div>
+                  {r.pred.restockDate && <div style={{ marginTop:6, fontSize:11, color:'var(--ink-mute)' }}>建議進貨日 {fmtDateFull(r.pred.restockDate)}</div>}
+                </div>
+              ))}
+            </div>
+            {analysisRows.length===0 && <EmptyState icon="channel" title="資料不足以預判" hint="需至少 1 個月的月銷售紀錄才能估算"/>}
+          </div>
+        </>
+      )}
+
+      {/* 登記進貨 */}
+      <Modal open={restockOpen} onClose={()=>setRestockOpen(false)} title="登記進貨"
+        footer={<><div style={{ flex:1 }}/><button className="btn btn-ghost" onClick={()=>setRestockOpen(false)}>取消</button><button className="btn btn-primary" onClick={saveRestock}>儲存</button></>}>
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <div className="field"><label>品項<span className="req">*</span></label>
+            <select className="select" value={restockForm.stockId} onChange={e=>setRestockForm({...restockForm,stockId:e.target.value})}>
+              {goodsStocks.length===0 && <option value="">尚無商品庫存品項</option>}
+              {goodsStocks.map(s=><option key={s.id} value={s.id}>{s.name}（倉庫現有 {s.qty}）</option>)}
+            </select>
+          </div>
+          <div className="row">
+            <div className="field"><label>進貨數量</label><input className="input mono" type="number" value={restockForm.qty} onChange={e=>setRestockForm({...restockForm,qty:e.target.value})}/></div>
+            <div className="field"><label>成本（選填）</label><input className="input mono" type="number" value={restockForm.cost} onChange={e=>setRestockForm({...restockForm,cost:e.target.value})}/></div>
+          </div>
+          <div className="row">
+            <div className="field"><label>日期</label><input className="input" type="date" value={restockForm.date} onChange={e=>setRestockForm({...restockForm,date:e.target.value})}/></div>
+            <div className="field"><label>備註</label><input className="input" value={restockForm.note} onChange={e=>setRestockForm({...restockForm,note:e.target.value})}/></div>
+          </div>
+          <div style={{ fontSize:11, color:'var(--ink-mute)' }}>進貨會從「庫存管理」倉庫扣除對應數量，並記錄一筆出貨紀錄。</div>
+        </div>
+      </Modal>
+
+      {/* 編輯進貨紀錄（日期/備註） */}
+      <Modal open={!!restockEdit} onClose={()=>setRestockEdit(null)} title="編輯進貨紀錄"
+        footer={<><button className="btn btn-danger" onClick={deleteRestock}><Icon name="trash" size={13}/> 刪除</button><div style={{ flex:1 }}/><button className="btn btn-ghost" onClick={()=>setRestockEdit(null)}>取消</button><button className="btn btn-primary" onClick={saveRestockEditFn}>確認</button></>}>
+        {restockEdit && (
+          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            <div style={{ padding:'12px 16px', background:'var(--paper-deep)', borderRadius:8, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div className="eyebrow">{restockEdit.name}</div>
+              <div className="mono" style={{ fontWeight:700, color:'var(--moss)' }}>+{restockEdit.qty}</div>
+            </div>
+            <div className="row">
+              <div className="field"><label>日期</label><input className="input" type="date" value={restockEdit.date} onChange={e=>setRestockEdit({...restockEdit,date:e.target.value})}/></div>
+              <div className="field"><label>備註</label><input className="input" value={restockEdit.note||''} onChange={e=>setRestockEdit({...restockEdit,note:e.target.value})}/></div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* 新增/編輯 月銷售 */}
+      <Modal open={saleOpen} onClose={()=>setSaleOpen(false)} title={saleForm.id?'編輯月銷售':'新增月銷售'}
+        footer={<>
+          {saleForm.id && <button className="btn btn-danger" onClick={handleDeleteSale}><Icon name="trash" size={13}/> 刪除</button>}
+          <div style={{ flex:1 }}/>
+          <button className="btn btn-ghost" onClick={()=>setSaleOpen(false)}>取消</button>
+          <button className="btn btn-primary" onClick={saveSale}>儲存</button>
+        </>}>
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <div className="field"><label>品項<span className="req">*</span></label>
+            <select className="select" value={saleForm.stockId} disabled={!!saleForm.id} onChange={e=>setSaleForm({...saleForm,stockId:e.target.value})}>
+              {goodsStocks.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div className="row">
+            <div className="field"><label>月份</label><input className="input" type="month" value={saleForm.month} disabled={!!saleForm.id} onChange={e=>setSaleForm({...saleForm,month:e.target.value})}/></div>
+            <div className="field"><label>銷售數量</label><input className="input mono" type="number" value={saleForm.qty} onChange={e=>setSaleForm({...saleForm,qty:e.target.value})}/></div>
+          </div>
+          <div className="row">
+            <div className="field"><label>業績金額</label><input className="input mono" type="number" value={saleForm.revenue} onChange={e=>setSaleForm({...saleForm,revenue:e.target.value})}/></div>
+            <div className="field"><label>備註</label><input className="input" value={saleForm.note} onChange={e=>setSaleForm({...saleForm,note:e.target.value})}/></div>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+};
+
+// ═══ 全通路分析 ═══
+const ChannelsAnalysis = ({ state, channels }) => {
+  const months = last6MonthsCH();
+  const allSales = (state.channelSales||[]).filter(x=>!x._deleted);
+
+  const byChannel = channels.map(c=>({
+    id:c.id, name:c.name,
+    revenue: allSales.filter(x=>x.channelId===c.id).reduce((a,b)=>a+(Number(b.revenue)||0),0),
+  })).sort((a,b)=>b.revenue-a.revenue);
+
+  const monthlyTotal = months.map(m=>({ key:m, label:monthLabelCH(m), value: allSales.filter(x=>x.month===m).reduce((a,b)=>a+(Number(b.revenue)||0),0) }));
+
+  const byType = CHANNEL_TYPES.map(t=>({
+    label:t.l,
+    value: channels.filter(c=>c.type===t.v).reduce((sum,c)=> sum + allSales.filter(x=>x.channelId===c.id).reduce((a,b)=>a+(Number(b.revenue)||0),0), 0),
+  }));
+
+  const alerts = [];
+  channels.forEach(c=>{
+    allItemPairsCH(state, c.id).forEach(p=>{
+      const pred = predictItem(state, c.id, p.stockId);
+      if (!pred) return;
+      if (pred.daysLeft!=null && pred.daysLeft<=30) {
+        const stockItem = state.stocks.find(s=>s.id===p.stockId);
+        alerts.push({ channelName:c.name, itemName: stockItem?stockItem.name:'(已刪除品項)', ...pred });
+      }
+    });
+  });
+  alerts.sort((a,b)=>(a.daysLeft??999)-(b.daysLeft??999));
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      <div className="card">
+        <div className="card-head"><div className="card-title">全通路業績趨勢（近 6 個月）</div></div>
+        <Sparkline data={monthlyTotal.map(m=>m.value)} labels={monthlyTotal.map(m=>m.label)} color="var(--clay)"/>
+      </div>
+      <div className="card">
+        <div className="card-head"><div className="card-title">通路業績排名</div><div className="card-subtle">依各通路月銷售紀錄加總</div></div>
+        {byChannel.some(c=>c.revenue>0)
+          ? <BarList items={byChannel.map(c=>({ label:c.name, value:c.revenue }))}/>
+          : <EmptyState icon="channel" title="尚無品項銷售資料" hint="於各通路的「月銷售」分頁登記後即可看到排名"/>}
+      </div>
+      <div className="card">
+        <div className="card-head"><div className="card-title">通路類型佔比</div></div>
+        {byType.some(t=>t.value>0)
+          ? <BarList items={byType}/>
+          : <EmptyState icon="channel" title="尚無資料"/>}
+      </div>
+      <div className="card">
+        <div className="card-head"><div className="card-title">進貨提醒</div><div className="card-subtle">預估 30 天內需補貨的品項</div></div>
+        <table className="tbl desk-only">
+          <thead><tr><th>通路</th><th>品項</th><th style={{ textAlign:'right' }}>目前庫存</th><th style={{ textAlign:'right' }}>可撐天數</th><th style={{ textAlign:'right' }}>建議進貨量</th><th>建議進貨日</th></tr></thead>
+          <tbody>
+            {alerts.slice(0,15).map((a,i)=>(
+              <tr key={i}>
+                <td>{a.channelName}</td>
+                <td style={{ fontWeight:600 }}>{a.itemName}</td>
+                <td className="num">{a.currentQty}</td>
+                <td className="num" style={{ color:'var(--terracotta)', fontWeight:700 }}>{a.daysLeft==null?'--':a.daysLeft+' 天'}</td>
+                <td className="num">{a.suggestedQty}</td>
+                <td className="mono" style={{ fontSize:12 }}>{a.restockDate?fmtDateFull(a.restockDate):'--'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="mob-cards">
+          {alerts.slice(0,15).map((a,i)=>(
+            <div key={i} className="mob-card">
+              <div style={{ display:'flex', justifyContent:'space-between' }}>
+                <div><div style={{ fontWeight:700 }}>{a.itemName}</div><div style={{ fontSize:11, color:'var(--ink-mute)' }}>{a.channelName}</div></div>
+                <div className="mono" style={{ fontWeight:700, color:'var(--terracotta)' }}>{a.daysLeft==null?'--':a.daysLeft+'天'}</div>
+              </div>
+              <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:4 }}>建議進貨 {a.suggestedQty}（{a.restockDate?fmtDateFull(a.restockDate):'--'}）</div>
+            </div>
+          ))}
+        </div>
+        {alerts.length===0 && <EmptyState icon="channel" title="目前沒有需要注意的補貨提醒"/>}
+      </div>
+    </div>
+  );
+};
+
+// ═══ 通路列表 + CRUD ═══
 const ChannelsView = ({ state, setState }) => {
   const [modalOpen, setModalOpen] = useStateCH(false);
   const [editingId, setEditingId] = useStateCH(null);
   const [form, setForm] = useStateCH(emptyCH());
+  const [topTab, setTopTab] = useStateCH('list'); // list | analysis
+  const [detailId, setDetailId] = useStateCH(null);
   function emptyCH(){ return { id:'', name:'', type:'direct', fee:0, fee_unit:'%', sales:0, orders:0, note:'', active:true }; }
 
   const list = (state.channels || []).filter(c => !c._deleted);
@@ -37,62 +499,79 @@ const ChannelsView = ({ state, setState }) => {
   const del = () => { if(!confirm('刪除此通路？將移至回收桶（保留 10 天）。'))return; setState(s=> window.softDel(s, 'channels', editingId)); setModalOpen(false); toast('已移至回收桶'); };
 
   const maxSales = Math.max(...list.map(c=>c.sales), 1);
+  const activeChannel = detailId ? list.find(c=>c.id===detailId) : null;
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-      <div className="topbar">
-        <div className="topbar-l">
-          <div className="eyebrow">業務</div>
-          <h1 className="h1">通路控管</h1>
-          <div className="sub">{list.length} 個通路 · 總銷售 {fmtMoney(totals.sales,true)} · 扣除平台費淨收 {fmtMoney(totals.net,true)}</div>
-        </div>
-        <div className="topbar-r">
-          <button className="btn btn-primary" onClick={openNew}><Icon name="plus" size={14}/> 新增通路</button>
-        </div>
-      </div>
+      {activeChannel ? (
+        <ChannelDetail channel={activeChannel} state={state} setState={setState}
+          onBack={()=>setDetailId(null)} onEdit={()=>openEdit(activeChannel)}/>
+      ) : (
+        <>
+          <div className="topbar">
+            <div className="topbar-l">
+              <div className="eyebrow">業務</div>
+              <h1 className="h1">通路控管</h1>
+              <div className="sub">{list.length} 個通路 · 總銷售 {fmtMoney(totals.sales,true)} · 扣除平台費淨收 {fmtMoney(totals.net,true)}</div>
+            </div>
+            <div className="topbar-r">
+              <button className={'btn btn-sm '+(topTab==='analysis'?'btn-ink':'btn-ghost')} onClick={()=>setTopTab(topTab==='analysis'?'list':'analysis')}>
+                {topTab==='analysis'?'回到通路列表':'全通路分析'}
+              </button>
+              <button className="btn btn-primary" onClick={openNew}><Icon name="plus" size={14}/> 新增通路</button>
+            </div>
+          </div>
 
-      <div className="card flat" style={{ padding:0 }}>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)' }} className="crm-stats">
-          <div className="stat"><span className="lab">銷售總額</span><span className="val mono-val">{fmtMoney(totals.sales,true)}</span><span className="delta muted">所有通路</span></div>
-          <div className="stat"><span className="lab">平台費用</span><span className="val mono-val" style={{ color:'var(--terracotta)' }}>{fmtMoney(totals.fee,true)}</span><span className="delta muted">{totals.sales?Math.round(totals.fee/totals.sales*100):0}% 佔比</span></div>
-          <div className="stat"><span className="lab">實收淨額</span><span className="val mono-val" style={{ color:'var(--clay)' }}>{fmtMoney(totals.net,true)}</span><span className="delta muted">扣除手續費</span></div>
-          <div className="stat"><span className="lab">訂單筆數</span><span className="val">{totals.orders}</span><span className="delta muted">平均單價 {fmtMoney(totals.orders?Math.round(totals.sales/totals.orders):0)}</span></div>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-head"><div className="card-title">通路明細</div><div className="card-subtle">點卡片進入編輯</div></div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px,1fr))', gap:12 }}>
-          {list.map(c => {
-            const feeAmt = c.fee_unit==='%' ? c.sales * c.fee/100 : c.orders * c.fee;
-            const net = c.sales - feeAmt;
-            const pct = totals.sales ? Math.round(c.sales/totals.sales*100) : 0;
-            const t = CHANNEL_TYPES.find(x=>x.v===c.type) || CHANNEL_TYPES[0];
-            return (
-              <div key={c.id} className="card flat" style={{ border:'1px solid var(--rule-soft)', padding:14, cursor:'pointer' }} onClick={()=>openEdit(c)}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
-                  <div style={{ minWidth:0, flex:1 }}>
-                    <div style={{ fontFamily:'var(--f-serif)', fontSize:16, fontWeight:600 }}>{c.name}</div>
-                    <Pill tone={t.tone}>{t.l}</Pill>
-                  </div>
-                  <div style={{ textAlign:'right' }}>
-                    <div className="mono" style={{ fontSize:17, fontWeight:700, color:'var(--clay)' }}>{fmtMoney(c.sales,true)}</div>
-                    <div style={{ fontSize:10, color:'var(--ink-mute)' }}>{c.orders} 筆</div>
-                  </div>
+          {topTab==='analysis' ? (
+            <ChannelsAnalysis state={state} channels={list}/>
+          ) : (
+            <>
+              <div className="card flat" style={{ padding:0 }}>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)' }} className="crm-stats">
+                  <div className="stat"><span className="lab">銷售總額</span><span className="val mono-val">{fmtMoney(totals.sales,true)}</span><span className="delta muted">所有通路</span></div>
+                  <div className="stat"><span className="lab">平台費用</span><span className="val mono-val" style={{ color:'var(--terracotta)' }}>{fmtMoney(totals.fee,true)}</span><span className="delta muted">{totals.sales?Math.round(totals.fee/totals.sales*100):0}% 佔比</span></div>
+                  <div className="stat"><span className="lab">實收淨額</span><span className="val mono-val" style={{ color:'var(--clay)' }}>{fmtMoney(totals.net,true)}</span><span className="delta muted">扣除手續費</span></div>
+                  <div className="stat"><span className="lab">訂單筆數</span><span className="val">{totals.orders}</span><span className="delta muted">平均單價 {fmtMoney(totals.orders?Math.round(totals.sales/totals.orders):0)}</span></div>
                 </div>
-                <div className="bar" style={{ margin:'8px 0' }}><div className="bar-fill" style={{ width: (c.sales/maxSales*100)+'%' }}/></div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, padding:'8px 0 0', borderTop:'1px dashed var(--rule-soft)', fontSize:11 }}>
-                  <div><span className="muted">抽成 </span><strong className="mono">{c.fee}{c.fee_unit}</strong></div>
-                  <div style={{ textAlign:'right' }}><span className="muted">淨收 </span><strong className="mono" style={{ color:'var(--moss)' }}>{fmtMoney(net,true)}</strong></div>
-                </div>
-                {c.note && <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:8, lineHeight:1.5 }}>{c.note}</div>}
-                <div style={{ marginTop:8, fontSize:10, color:'var(--ink-faint)' }}>佔比 {pct}%</div>
               </div>
-            );
-          })}
-        </div>
-        {list.length===0 && <EmptyState icon="channel" title="尚無通路" hint="新增一個銷售通路開始追蹤"/>}
-      </div>
+
+              <div className="card">
+                <div className="card-head"><div className="card-title">通路明細</div><div className="card-subtle">點卡片查看詳情</div></div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px,1fr))', gap:12 }}>
+                  {list.map(c => {
+                    const feeAmt = c.fee_unit==='%' ? c.sales * c.fee/100 : c.orders * c.fee;
+                    const net = c.sales - feeAmt;
+                    const pct = totals.sales ? Math.round(c.sales/totals.sales*100) : 0;
+                    const t = CHANNEL_TYPES.find(x=>x.v===c.type) || CHANNEL_TYPES[0];
+                    return (
+                      <div key={c.id} className="card flat" style={{ border:'1px solid var(--rule-soft)', padding:14, cursor:'pointer' }} onClick={()=>setDetailId(c.id)}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
+                          <div style={{ minWidth:0, flex:1 }}>
+                            <div style={{ fontFamily:'var(--f-serif)', fontSize:16, fontWeight:600 }}>{c.name}</div>
+                            <Pill tone={t.tone}>{t.l}</Pill>
+                          </div>
+                          <div style={{ textAlign:'right' }}>
+                            <div className="mono" style={{ fontSize:17, fontWeight:700, color:'var(--clay)' }}>{fmtMoney(c.sales,true)}</div>
+                            <div style={{ fontSize:10, color:'var(--ink-mute)' }}>{c.orders} 筆</div>
+                          </div>
+                        </div>
+                        <div className="bar" style={{ margin:'8px 0' }}><div className="bar-fill" style={{ width: (c.sales/maxSales*100)+'%' }}/></div>
+                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, padding:'8px 0 0', borderTop:'1px dashed var(--rule-soft)', fontSize:11 }}>
+                          <div><span className="muted">抽成 </span><strong className="mono">{c.fee}{c.fee_unit}</strong></div>
+                          <div style={{ textAlign:'right' }}><span className="muted">淨收 </span><strong className="mono" style={{ color:'var(--moss)' }}>{fmtMoney(net,true)}</strong></div>
+                        </div>
+                        {c.note && <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:8, lineHeight:1.5 }}>{c.note}</div>}
+                        <div style={{ marginTop:8, fontSize:10, color:'var(--ink-faint)' }}>佔比 {pct}%</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {list.length===0 && <EmptyState icon="channel" title="尚無通路" hint="新增一個銷售通路開始追蹤"/>}
+              </div>
+            </>
+          )}
+        </>
+      )}
 
       <Modal open={modalOpen} onClose={()=>setModalOpen(false)} title={editingId?'編輯通路':'新增通路'}
         footer={<>

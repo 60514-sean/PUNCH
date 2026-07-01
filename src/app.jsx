@@ -33,7 +33,7 @@ const TRASH_MS = TRASH_DAYS * 86400 * 1000;
 // Purge soft-deleted items older than TRASH_DAYS
 function purgeOldTrash(state) {
   const now = Date.now();
-  const colls = ['orders','finances','stocks','products','accessories','customers','quotes','channels','tasks','logs'];
+  const colls = ['orders','finances','stocks','products','accessories','customers','quotes','channels','tasks','logs','channelRestocks','channelSales'];
   colls.forEach(k => {
     if (Array.isArray(state[k])) {
       state[k] = state[k].filter(x => !x._deleted || (now - x._deleted < TRASH_MS));
