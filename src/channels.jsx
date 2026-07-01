@@ -63,7 +63,7 @@ function allItemPairsCH(state, channelId) {
   return Array.from(map.values());
 }
 
-// ─── 業績金額固定含稅（5% 營業稅）。抽成用含稅業績金額計算，利潤 = 未稅業績 − 進貨成本 − 通路抽成 ───
+// ─── 業績金額固定含稅（5% 營業稅）。毛利(含稅) = 業績金額 − 通路抽成；淨利 = 毛利(含稅) − 稅 − 進貨成本 ───
 const VAT_RATE = 5;
 const untaxCH = (amt) => (Number(amt)||0) / (1 + VAT_RATE/100);
 
@@ -83,13 +83,15 @@ function productSellPrice(state, stockName) {
   return product ? Number(product.price)||0 : 0;
 }
 
-// 單筆月銷售的利潤拆解：未稅業績、成本、通路抽成、淨利
+// 單筆月銷售的利潤拆解：通路抽成、進貨成本、毛利(含稅)、稅、淨利
+// 毛利(含稅) = 業績金額 − 通路抽成；淨利 = 毛利(含稅) − 稅（毛利中內含的營業稅）− 進貨成本
 function calcSaleProfit(channel, qty, revenue, unitCost) {
-  const untaxed = untaxCH(revenue);
   const cost = (Number(qty)||0) * (Number(unitCost)||0);
   const fee = channel.fee_unit==='%' ? (Number(revenue)||0) * (Number(channel.fee)||0)/100 : (Number(qty)||0) * (Number(channel.fee)||0);
-  const profit = untaxed - cost - fee;
-  return { untaxed, cost, fee, profit };
+  const grossTaxed = (Number(revenue)||0) - fee;
+  const tax = grossTaxed - untaxCH(grossTaxed);
+  const profit = grossTaxed - tax - cost;
+  return { cost, fee, grossTaxed, tax, profit };
 }
 
 // ═══ 通路詳情：庫存/進貨、月銷售、分析與預判 ═══
@@ -345,7 +347,7 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
             <Sparkline data={revenueTrend.map(m=>m.value)} labels={revenueTrend.map(m=>m.label)} color="var(--clay)"/>
           </div>
           <div className="card">
-            <div className="card-head"><div className="card-title">近 6 個月淨利趨勢</div><div className="card-subtle">未稅業績 − 進貨成本 − 通路抽成</div></div>
+            <div className="card-head"><div className="card-title">近 6 個月淨利趨勢</div><div className="card-subtle">毛利(含稅) − 稅 − 進貨成本</div></div>
             <Sparkline data={profitTrend.map(m=>m.value)} labels={profitTrend.map(m=>m.label)} color="var(--moss)"/>
           </div>
           <div className="card">
@@ -457,9 +459,9 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
             const p = calcSaleProfit(channel, Number(saleForm.qty)||0, previewRevenue, previewCost);
             return (
               <div style={{ padding:'12px 14px', background:'var(--paper-deep)', borderRadius:8, display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, fontSize:12 }}>
-                <div><div className="muted" style={{ fontSize:11 }}>未稅業績</div><div className="mono" style={{ fontWeight:700 }}>{fmtMoney(Math.round(p.untaxed))}</div></div>
-                <div><div className="muted" style={{ fontSize:11 }}>進貨成本</div><div className="mono" style={{ fontWeight:700 }}>{fmtMoney(Math.round(p.cost))}</div></div>
                 <div><div className="muted" style={{ fontSize:11 }}>通路抽成</div><div className="mono" style={{ fontWeight:700 }}>{fmtMoney(Math.round(p.fee))}</div></div>
+                <div><div className="muted" style={{ fontSize:11 }}>進貨成本</div><div className="mono" style={{ fontWeight:700 }}>{fmtMoney(Math.round(p.cost))}</div></div>
+                <div><div className="muted" style={{ fontSize:11 }}>毛利（含稅）</div><div className="mono" style={{ fontWeight:700 }}>{fmtMoney(Math.round(p.grossTaxed))}</div></div>
                 <div><div className="muted" style={{ fontSize:11 }}>預估淨利</div><div className="mono" style={{ fontWeight:700, color: p.profit>=0?'var(--moss)':'var(--terracotta)' }}>{fmtMoney(Math.round(p.profit))}</div></div>
               </div>
             );
@@ -478,7 +480,7 @@ const ChannelsAnalysis = ({ state, channels }) => {
   const channelsById = new Map(channels.map(c=>[c.id,c]));
   const salesWithProfit = allSales.map(r=>{
     const ch = channelsById.get(r.channelId);
-    if (!ch) return { ...r, untaxed:untaxCH(r.revenue), cost:0, fee:0, profit:untaxCH(r.revenue) };
+    if (!ch) return { ...r, cost:0, fee:0, grossTaxed:r.revenue, tax:r.revenue-untaxCH(r.revenue), profit:untaxCH(r.revenue) };
     const unitCost = r.unitCost!=null ? r.unitCost : channelAvgCost(state, r.channelId, r.stockId);
     return { ...r, ...calcSaleProfit(ch, r.qty, r.revenue, unitCost) };
   });
@@ -521,7 +523,7 @@ const ChannelsAnalysis = ({ state, channels }) => {
         <Sparkline data={monthlyTotal.map(m=>m.value)} labels={monthlyTotal.map(m=>m.label)} color="var(--clay)"/>
       </div>
       <div className="card">
-        <div className="card-head"><div className="card-title">全通路淨利趨勢（近 6 個月）</div><div className="card-subtle">未稅業績 − 進貨成本 − 通路抽成</div></div>
+        <div className="card-head"><div className="card-title">全通路淨利趨勢（近 6 個月）</div><div className="card-subtle">毛利(含稅) − 稅 − 進貨成本</div></div>
         <Sparkline data={monthlyProfit.map(m=>m.value)} labels={monthlyProfit.map(m=>m.label)} color="var(--moss)"/>
       </div>
       <div className="card">
