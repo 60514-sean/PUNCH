@@ -63,6 +63,29 @@ function allItemPairsCH(state, channelId) {
   return Array.from(map.values());
 }
 
+// ─── 業績金額固定含稅（5% 營業稅），利潤 = 未稅業績 − 進貨成本 − 通路抽成 ───
+const VAT_RATE = 5;
+const untaxCH = (amt) => (Number(amt)||0) / (1 + VAT_RATE/100);
+
+// 某通路某品項「至今」的進貨加權平均單位成本（依 channelRestocks 歷史回推，未進貨過則退回庫存管理單價成本）
+function channelAvgCost(state, channelId, stockId) {
+  const restocks = (state.channelRestocks||[]).filter(r=>!r._deleted && r.channelId===channelId && r.stockId===stockId);
+  const totalQty = restocks.reduce((a,b)=>a+(Number(b.qty)||0),0);
+  const totalCost = restocks.reduce((a,b)=>a+(Number(b.cost)||0),0);
+  if (totalQty>0) return totalCost/totalQty;
+  const stockItem = state.stocks.find(s=>s.id===stockId);
+  return stockItem ? Number(stockItem.price)||0 : 0;
+}
+
+// 單筆月銷售的利潤拆解：未稅業績、成本、通路抽成、淨利
+function calcSaleProfit(channel, qty, revenue, unitCost) {
+  const untaxed = untaxCH(revenue);
+  const cost = (Number(qty)||0) * (Number(unitCost)||0);
+  const fee = channel.fee_unit==='%' ? untaxed * (Number(channel.fee)||0)/100 : (Number(qty)||0) * (Number(channel.fee)||0);
+  const profit = untaxed - cost - fee;
+  return { untaxed, cost, fee, profit };
+}
+
 // ═══ 通路詳情：庫存/進貨、月銷售、分析與預判 ═══
 const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
   const [subTab, setSubTab] = useStateCH('stock'); // stock | sales | analysis
@@ -126,15 +149,16 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
     const qty = Number(saleForm.qty)||0;
     const revenue = Number(saleForm.revenue)||0;
     const month = saleForm.month || new Date().toISOString().slice(0,7);
+    const unitCost = channelAvgCost(state, channel.id, stockItem.id);
     setState(s=>{
       let salesNext = s.channelSales||[];
       let delta = qty;
       if (saleForm.id) {
         const old = salesNext.find(x=>x.id===saleForm.id);
         delta = qty - (old ? Number(old.qty)||0 : 0);
-        salesNext = salesNext.map(x=> x.id===saleForm.id ? { ...x, qty, revenue, note:saleForm.note||'' } : x);
+        salesNext = salesNext.map(x=> x.id===saleForm.id ? { ...x, qty, revenue, unitCost, note:saleForm.note||'' } : x);
       } else {
-        salesNext = [{ id:uid(), channelId:channel.id, stockId:stockItem.id, name:stockItem.name, month, qty, revenue, note:saleForm.note||'' }, ...salesNext];
+        salesNext = [{ id:uid(), channelId:channel.id, stockId:stockItem.id, name:stockItem.name, month, qty, revenue, unitCost, note:saleForm.note||'' }, ...salesNext];
       }
       const chStock = (s.channelStock||[]).map(r=> (r.channelId===channel.id && r.stockId===stockItem.id) ? { ...r, qty:Math.max(0, r.qty-delta) } : r);
       return { ...s, channelSales: salesNext, channelStock: chStock };
@@ -153,10 +177,19 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
     setSaleOpen(false);
   };
 
+  const salesWithProfit = useMemoCH(()=>{
+    return sales.map(r=>({ ...r, ...calcSaleProfit(channel, r.qty, r.revenue, r.unitCost!=null?r.unitCost:channelAvgCost(state, channel.id, r.stockId)) }));
+  }, [sales, channel, state]);
+
   const revenueTrend = useMemoCH(()=>{
     const months = last6MonthsCH();
-    return months.map(m=>({ key:m, label:monthLabelCH(m), value: sales.filter(x=>x.month===m).reduce((a,b)=>a+(Number(b.revenue)||0),0) }));
-  }, [sales]);
+    return months.map(m=>({ key:m, label:monthLabelCH(m), value: salesWithProfit.filter(x=>x.month===m).reduce((a,b)=>a+(Number(b.revenue)||0),0) }));
+  }, [salesWithProfit]);
+
+  const profitTrend = useMemoCH(()=>{
+    const months = last6MonthsCH();
+    return months.map(m=>({ key:m, label:monthLabelCH(m), value: salesWithProfit.filter(x=>x.month===m).reduce((a,b)=>a+b.profit,0) }));
+  }, [salesWithProfit]);
 
   const analysisRows = useMemoCH(()=>{
     return allItemPairsCH(state, channel.id).map(p=>{
@@ -248,25 +281,29 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
             <button className="btn btn-primary btn-sm" onClick={openSaleNew}><Icon name="plus" size={13}/> 新增月銷售</button>
           </div>
           <table className="tbl desk-only">
-            <thead><tr><th>月份</th><th>品項</th><th style={{ textAlign:'right' }}>數量</th><th style={{ textAlign:'right' }}>業績</th><th>備註</th></tr></thead>
+            <thead><tr><th>月份</th><th>品項</th><th style={{ textAlign:'right' }}>數量</th><th style={{ textAlign:'right' }}>業績（含稅）</th><th style={{ textAlign:'right' }}>淨利</th><th>備註</th></tr></thead>
             <tbody>
-              {sales.map(r=>(
+              {salesWithProfit.map(r=>(
                 <tr key={r.id} style={{ cursor:'pointer' }} onClick={()=>openSaleEdit(r)}>
                   <td className="mono">{monthLabelCH(r.month)} <span style={{ color:'var(--ink-faint)', fontSize:11 }}>{r.month}</span></td>
                   <td>{r.name}</td>
                   <td className="num">{r.qty}</td>
                   <td className="num" style={{ fontWeight:700 }}>{fmtMoney(r.revenue,true)}</td>
+                  <td className="num" style={{ fontWeight:700, color: r.profit>=0?'var(--moss)':'var(--terracotta)' }}>{fmtMoney(Math.round(r.profit),true)}</td>
                   <td style={{ fontSize:12, color:'var(--ink-soft)' }}>{r.note}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           <div className="mob-cards">
-            {sales.map(r=>(
+            {salesWithProfit.map(r=>(
               <div key={r.id} className="mob-card" style={{ cursor:'pointer' }} onClick={()=>openSaleEdit(r)}>
                 <div style={{ display:'flex', justifyContent:'space-between' }}>
                   <div><div style={{ fontWeight:600 }}>{r.name}</div><div style={{ fontSize:11, color:'var(--ink-mute)' }}>{monthLabelCH(r.month)} · {r.qty} 件</div></div>
-                  <div className="mono" style={{ fontWeight:700 }}>{fmtMoney(r.revenue,true)}</div>
+                  <div style={{ textAlign:'right' }}>
+                    <div className="mono" style={{ fontWeight:700 }}>{fmtMoney(r.revenue,true)}</div>
+                    <div className="mono" style={{ fontSize:11, color: r.profit>=0?'var(--moss)':'var(--terracotta)' }}>淨利 {fmtMoney(Math.round(r.profit),true)}</div>
+                  </div>
                 </div>
               </div>
             ))}
@@ -277,9 +314,20 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
 
       {subTab==='analysis' && (
         <>
+          <div className="card flat" style={{ padding:0 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)' }} className="crm-stats">
+              <div className="stat"><span className="lab">本月業績（含稅）</span><span className="val mono-val">{fmtMoney(salesWithProfit.filter(x=>x.month===new Date().toISOString().slice(0,7)).reduce((a,b)=>a+(Number(b.revenue)||0),0),true)}</span></div>
+              <div className="stat"><span className="lab">本月淨利</span><span className="val mono-val" style={{ color:'var(--moss)' }}>{fmtMoney(Math.round(salesWithProfit.filter(x=>x.month===new Date().toISOString().slice(0,7)).reduce((a,b)=>a+b.profit,0)),true)}</span></div>
+              <div className="stat"><span className="lab">近6月累計淨利</span><span className="val mono-val" style={{ color:'var(--moss)' }}>{fmtMoney(Math.round(profitTrend.reduce((a,b)=>a+b.value,0)),true)}</span></div>
+            </div>
+          </div>
           <div className="card">
-            <div className="card-head"><div className="card-title">近 6 個月業績趨勢</div></div>
+            <div className="card-head"><div className="card-title">近 6 個月業績趨勢</div><div className="card-subtle">含稅金額</div></div>
             <Sparkline data={revenueTrend.map(m=>m.value)} labels={revenueTrend.map(m=>m.label)} color="var(--clay)"/>
+          </div>
+          <div className="card">
+            <div className="card-head"><div className="card-title">近 6 個月淨利趨勢</div><div className="card-subtle">未稅業績 − 進貨成本 − 通路抽成</div></div>
+            <Sparkline data={profitTrend.map(m=>m.value)} labels={profitTrend.map(m=>m.label)} color="var(--moss)"/>
           </div>
           <div className="card">
             <div className="card-head"><div className="card-title">品項進貨預判</div><div className="card-subtle">依近 3 月銷量與季節指數估算</div></div>
@@ -330,13 +378,13 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
           </div>
           <div className="row">
             <div className="field"><label>進貨數量</label><input className="input mono" type="number" value={restockForm.qty} onChange={e=>setRestockForm({...restockForm,qty:e.target.value})}/></div>
-            <div className="field"><label>成本（選填）</label><input className="input mono" type="number" value={restockForm.cost} onChange={e=>setRestockForm({...restockForm,cost:e.target.value})}/></div>
+            <div className="field"><label>本批總成本（選填）</label><input className="input mono" type="number" value={restockForm.cost} onChange={e=>setRestockForm({...restockForm,cost:e.target.value})}/></div>
           </div>
           <div className="row">
             <div className="field"><label>日期</label><input className="input" type="date" value={restockForm.date} onChange={e=>setRestockForm({...restockForm,date:e.target.value})}/></div>
             <div className="field"><label>備註</label><input className="input" value={restockForm.note} onChange={e=>setRestockForm({...restockForm,note:e.target.value})}/></div>
           </div>
-          <div style={{ fontSize:11, color:'var(--ink-mute)' }}>進貨會從「庫存管理」倉庫扣除對應數量，並記錄一筆出貨紀錄。</div>
+          <div style={{ fontSize:11, color:'var(--ink-mute)' }}>進貨會從「庫存管理」倉庫扣除對應數量，並記錄一筆出貨紀錄。填寫總成本可用於估算此通路的單位進貨成本與銷售淨利。</div>
         </div>
       </Modal>
 
@@ -376,9 +424,21 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
             <div className="field"><label>銷售數量</label><input className="input mono" type="number" value={saleForm.qty} onChange={e=>setSaleForm({...saleForm,qty:e.target.value})}/></div>
           </div>
           <div className="row">
-            <div className="field"><label>業績金額</label><input className="input mono" type="number" value={saleForm.revenue} onChange={e=>setSaleForm({...saleForm,revenue:e.target.value})}/></div>
+            <div className="field"><label>業績金額（含稅）</label><input className="input mono" type="number" value={saleForm.revenue} onChange={e=>setSaleForm({...saleForm,revenue:e.target.value})}/></div>
             <div className="field"><label>備註</label><input className="input" value={saleForm.note} onChange={e=>setSaleForm({...saleForm,note:e.target.value})}/></div>
           </div>
+          {saleForm.stockId && (Number(saleForm.qty)>0 || Number(saleForm.revenue)>0) && (()=>{
+            const previewCost = channelAvgCost(state, channel.id, saleForm.stockId);
+            const p = calcSaleProfit(channel, Number(saleForm.qty)||0, Number(saleForm.revenue)||0, previewCost);
+            return (
+              <div style={{ padding:'12px 14px', background:'var(--paper-deep)', borderRadius:8, display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, fontSize:12 }}>
+                <div><div className="muted" style={{ fontSize:11 }}>未稅業績</div><div className="mono" style={{ fontWeight:700 }}>{fmtMoney(Math.round(p.untaxed))}</div></div>
+                <div><div className="muted" style={{ fontSize:11 }}>進貨成本</div><div className="mono" style={{ fontWeight:700 }}>{fmtMoney(Math.round(p.cost))}</div></div>
+                <div><div className="muted" style={{ fontSize:11 }}>通路抽成</div><div className="mono" style={{ fontWeight:700 }}>{fmtMoney(Math.round(p.fee))}</div></div>
+                <div><div className="muted" style={{ fontSize:11 }}>預估淨利</div><div className="mono" style={{ fontWeight:700, color: p.profit>=0?'var(--moss)':'var(--terracotta)' }}>{fmtMoney(Math.round(p.profit))}</div></div>
+              </div>
+            );
+          })()}
         </div>
       </Modal>
     </div>
@@ -390,16 +450,30 @@ const ChannelsAnalysis = ({ state, channels }) => {
   const months = last6MonthsCH();
   const allSales = (state.channelSales||[]).filter(x=>!x._deleted);
 
-  const byChannel = channels.map(c=>({
-    id:c.id, name:c.name,
-    revenue: allSales.filter(x=>x.channelId===c.id).reduce((a,b)=>a+(Number(b.revenue)||0),0),
-  })).sort((a,b)=>b.revenue-a.revenue);
+  const channelsById = new Map(channels.map(c=>[c.id,c]));
+  const salesWithProfit = allSales.map(r=>{
+    const ch = channelsById.get(r.channelId);
+    if (!ch) return { ...r, untaxed:untaxCH(r.revenue), cost:0, fee:0, profit:untaxCH(r.revenue) };
+    const unitCost = r.unitCost!=null ? r.unitCost : channelAvgCost(state, r.channelId, r.stockId);
+    return { ...r, ...calcSaleProfit(ch, r.qty, r.revenue, unitCost) };
+  });
 
-  const monthlyTotal = months.map(m=>({ key:m, label:monthLabelCH(m), value: allSales.filter(x=>x.month===m).reduce((a,b)=>a+(Number(b.revenue)||0),0) }));
+  const byChannel = channels.map(c=>{
+    const recs = salesWithProfit.filter(x=>x.channelId===c.id);
+    return {
+      id:c.id, name:c.name,
+      revenue: recs.reduce((a,b)=>a+(Number(b.revenue)||0),0),
+      profit: recs.reduce((a,b)=>a+b.profit,0),
+    };
+  }).sort((a,b)=>b.revenue-a.revenue);
+  const byChannelProfit = [...byChannel].sort((a,b)=>b.profit-a.profit);
+
+  const monthlyTotal = months.map(m=>({ key:m, label:monthLabelCH(m), value: salesWithProfit.filter(x=>x.month===m).reduce((a,b)=>a+(Number(b.revenue)||0),0) }));
+  const monthlyProfit = months.map(m=>({ key:m, label:monthLabelCH(m), value: salesWithProfit.filter(x=>x.month===m).reduce((a,b)=>a+b.profit,0) }));
 
   const byType = CHANNEL_TYPES.map(t=>({
     label:t.l,
-    value: channels.filter(c=>c.type===t.v).reduce((sum,c)=> sum + allSales.filter(x=>x.channelId===c.id).reduce((a,b)=>a+(Number(b.revenue)||0),0), 0),
+    value: channels.filter(c=>c.type===t.v).reduce((sum,c)=> sum + salesWithProfit.filter(x=>x.channelId===c.id).reduce((a,b)=>a+(Number(b.revenue)||0),0), 0),
   }));
 
   const alerts = [];
@@ -418,14 +492,24 @@ const ChannelsAnalysis = ({ state, channels }) => {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
       <div className="card">
-        <div className="card-head"><div className="card-title">全通路業績趨勢（近 6 個月）</div></div>
+        <div className="card-head"><div className="card-title">全通路業績趨勢（近 6 個月）</div><div className="card-subtle">含稅金額</div></div>
         <Sparkline data={monthlyTotal.map(m=>m.value)} labels={monthlyTotal.map(m=>m.label)} color="var(--clay)"/>
+      </div>
+      <div className="card">
+        <div className="card-head"><div className="card-title">全通路淨利趨勢（近 6 個月）</div><div className="card-subtle">未稅業績 − 進貨成本 − 通路抽成</div></div>
+        <Sparkline data={monthlyProfit.map(m=>m.value)} labels={monthlyProfit.map(m=>m.label)} color="var(--moss)"/>
       </div>
       <div className="card">
         <div className="card-head"><div className="card-title">通路業績排名</div><div className="card-subtle">依各通路月銷售紀錄加總</div></div>
         {byChannel.some(c=>c.revenue>0)
           ? <BarList items={byChannel.map(c=>({ label:c.name, value:c.revenue }))}/>
           : <EmptyState icon="channel" title="尚無品項銷售資料" hint="於各通路的「月銷售」分頁登記後即可看到排名"/>}
+      </div>
+      <div className="card">
+        <div className="card-head"><div className="card-title">通路淨利排名</div><div className="card-subtle">扣除進貨成本與抽成後</div></div>
+        {byChannelProfit.some(c=>c.profit!==0)
+          ? <BarList items={byChannelProfit.map(c=>({ label:c.name, value:Math.round(c.profit) }))} color="var(--moss)"/>
+          : <EmptyState icon="channel" title="尚無資料"/>}
       </div>
       <div className="card">
         <div className="card-head"><div className="card-title">通路類型佔比</div></div>
