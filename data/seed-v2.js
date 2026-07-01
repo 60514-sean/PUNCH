@@ -176,12 +176,12 @@ const DEMO_SEED = {
     { id:'cr4', channelId:'ch4', stockId:'g3', name:'陶土手沖濾杯', qty:6, cost:1560, date:'2026-04-01', note:'快閃市集備貨' },
   ],
   channelSales: [
-    { id:'csl1', channelId:'ch2', stockId:'g1', name:'手捏青瓷對杯', month:'2026-02', qty:3, revenue:5040, unitCost:840, note:'' },
-    { id:'csl2', channelId:'ch2', stockId:'g1', name:'手捏青瓷對杯', month:'2026-03', qty:4, revenue:6720, unitCost:840, note:'' },
-    { id:'csl3', channelId:'ch2', stockId:'g1', name:'手捏青瓷對杯', month:'2026-04', qty:2, revenue:3360, unitCost:840, note:'' },
-    { id:'csl4', channelId:'ch2', stockId:'g2', name:'亞麻方巾(米色)', month:'2026-03', qty:5, revenue:2100, unitCost:213.33, note:'' },
-    { id:'csl5', channelId:'ch2', stockId:'g2', name:'亞麻方巾(米色)', month:'2026-04', qty:2, revenue:840, unitCost:213.33, note:'' },
-    { id:'csl6', channelId:'ch4', stockId:'g3', name:'陶土手沖濾杯', month:'2026-04', qty:4, revenue:3920, unitCost:260, note:'誠品快閃巡迴' },
+    { id:'csl1', channelId:'ch2', stockId:'g1', name:'手捏青瓷對杯', month:'2026-02', qty:3, price:1680, revenue:5040, unitCost:840, note:'' },
+    { id:'csl2', channelId:'ch2', stockId:'g1', name:'手捏青瓷對杯', month:'2026-03', qty:4, price:1680, revenue:6720, unitCost:840, note:'' },
+    { id:'csl3', channelId:'ch2', stockId:'g1', name:'手捏青瓷對杯', month:'2026-04', qty:2, price:1680, revenue:3360, unitCost:840, note:'' },
+    { id:'csl4', channelId:'ch2', stockId:'g2', name:'亞麻方巾(米色)', month:'2026-03', qty:5, price:420, revenue:2100, unitCost:213.33, note:'' },
+    { id:'csl5', channelId:'ch2', stockId:'g2', name:'亞麻方巾(米色)', month:'2026-04', qty:2, price:420, revenue:840, unitCost:213.33, note:'' },
+    { id:'csl6', channelId:'ch4', stockId:'g3', name:'陶土手沖濾杯', month:'2026-04', qty:4, price:980, revenue:3920, unitCost:260, note:'誠品快閃巡迴' },
   ],
 };
 

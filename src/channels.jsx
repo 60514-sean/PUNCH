@@ -77,6 +77,12 @@ function channelAvgCost(state, channelId, stockId) {
   return stockItem ? Number(stockItem.price)||0 : 0;
 }
 
+// 依品項名稱從「產品成本」抓建議售價（含稅），找不到就回傳 0 讓使用者自行填寫
+function productSellPrice(state, stockName) {
+  const product = (state.products||[]).find(p=>!p._deleted && p.name===stockName);
+  return product ? Number(product.price)||0 : 0;
+}
+
 // 單筆月銷售的利潤拆解：未稅業績、成本、通路抽成、淨利
 function calcSaleProfit(channel, qty, revenue, unitCost) {
   const untaxed = untaxCH(revenue);
@@ -93,7 +99,7 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
   const [restockForm, setRestockForm] = useStateCH({ stockId:'', qty:'', cost:'', date:new Date().toISOString().slice(0,10), note:'' });
   const [restockEdit, setRestockEdit] = useStateCH(null);
   const [saleOpen, setSaleOpen] = useStateCH(false);
-  const [saleForm, setSaleForm] = useStateCH({ id:null, stockId:'', month:new Date().toISOString().slice(0,7), qty:'', revenue:'', note:'' });
+  const [saleForm, setSaleForm] = useStateCH({ id:null, stockId:'', month:new Date().toISOString().slice(0,7), qty:'', price:'', note:'' });
 
   const goodsStocks = state.stocks.filter(s=>!s._deleted && s.kind==='goods');
   const stockRows = (state.channelStock||[]).filter(r=>r.channelId===channel.id);
@@ -141,13 +147,26 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
     setRestockEdit(null);
   };
 
-  const openSaleNew = () => { setSaleForm({ id:null, stockId: goodsStocks[0]?.id||'', month:new Date().toISOString().slice(0,7), qty:'', revenue:'', note:'' }); setSaleOpen(true); };
-  const openSaleEdit = (rec) => { setSaleForm({ id:rec.id, stockId:rec.stockId, month:rec.month, qty:rec.qty, revenue:rec.revenue, note:rec.note||'' }); setSaleOpen(true); };
+  const openSaleNew = () => {
+    const first = goodsStocks[0];
+    setSaleForm({ id:null, stockId: first?.id||'', month:new Date().toISOString().slice(0,7), qty:'', price: first?productSellPrice(state, first.name):0, note:'' });
+    setSaleOpen(true);
+  };
+  const openSaleEdit = (rec) => {
+    const price = rec.price!=null ? rec.price : (rec.qty ? Math.round((rec.revenue/rec.qty)*100)/100 : 0);
+    setSaleForm({ id:rec.id, stockId:rec.stockId, month:rec.month, qty:rec.qty, price, note:rec.note||'' });
+    setSaleOpen(true);
+  };
+  const pickSaleStock = (stockId) => {
+    const stockItem = state.stocks.find(s=>s.id===stockId);
+    setSaleForm({ ...saleForm, stockId, price: stockItem?productSellPrice(state, stockItem.name):0 });
+  };
   const saveSale = () => {
     const stockItem = state.stocks.find(s=>s.id===saleForm.stockId);
     if (!stockItem) { toast('請選擇品項'); return; }
     const qty = Number(saleForm.qty)||0;
-    const revenue = Number(saleForm.revenue)||0;
+    const price = Number(saleForm.price)||0;
+    const revenue = qty * price;
     const month = saleForm.month || new Date().toISOString().slice(0,7);
     const unitCost = channelAvgCost(state, channel.id, stockItem.id);
     setState(s=>{
@@ -156,9 +175,9 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
       if (saleForm.id) {
         const old = salesNext.find(x=>x.id===saleForm.id);
         delta = qty - (old ? Number(old.qty)||0 : 0);
-        salesNext = salesNext.map(x=> x.id===saleForm.id ? { ...x, qty, revenue, unitCost, note:saleForm.note||'' } : x);
+        salesNext = salesNext.map(x=> x.id===saleForm.id ? { ...x, qty, price, revenue, unitCost, note:saleForm.note||'' } : x);
       } else {
-        salesNext = [{ id:uid(), channelId:channel.id, stockId:stockItem.id, name:stockItem.name, month, qty, revenue, unitCost, note:saleForm.note||'' }, ...salesNext];
+        salesNext = [{ id:uid(), channelId:channel.id, stockId:stockItem.id, name:stockItem.name, month, qty, price, revenue, unitCost, note:saleForm.note||'' }, ...salesNext];
       }
       const chStock = (s.channelStock||[]).map(r=> (r.channelId===channel.id && r.stockId===stockItem.id) ? { ...r, qty:Math.max(0, r.qty-delta) } : r);
       return { ...s, channelSales: salesNext, channelStock: chStock };
@@ -415,7 +434,7 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
         </>}>
         <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
           <div className="field"><label>品項<span className="req">*</span></label>
-            <select className="select" value={saleForm.stockId} disabled={!!saleForm.id} onChange={e=>setSaleForm({...saleForm,stockId:e.target.value})}>
+            <select className="select" value={saleForm.stockId} disabled={!!saleForm.id} onChange={e=>pickSaleStock(e.target.value)}>
               {goodsStocks.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
@@ -424,12 +443,18 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
             <div className="field"><label>銷售數量</label><input className="input mono" type="number" value={saleForm.qty} onChange={e=>setSaleForm({...saleForm,qty:e.target.value})}/></div>
           </div>
           <div className="row">
-            <div className="field"><label>業績金額（含稅）</label><input className="input mono" type="number" value={saleForm.revenue} onChange={e=>setSaleForm({...saleForm,revenue:e.target.value})}/></div>
-            <div className="field"><label>備註</label><input className="input" value={saleForm.note} onChange={e=>setSaleForm({...saleForm,note:e.target.value})}/></div>
+            <div className="field"><label>售價（含稅／單）</label><input className="input mono" type="number" value={saleForm.price} onChange={e=>setSaleForm({...saleForm,price:e.target.value})}/></div>
+            <div className="field"><label>業績金額（含稅，自動計算）</label>
+              <div className="input mono" style={{ background:'var(--paper-deep)', display:'flex', alignItems:'center', fontWeight:700 }}>
+                {fmtMoney((Number(saleForm.qty)||0)*(Number(saleForm.price)||0))}
+              </div>
+            </div>
           </div>
-          {saleForm.stockId && (Number(saleForm.qty)>0 || Number(saleForm.revenue)>0) && (()=>{
+          <div className="field"><label>備註</label><input className="input" value={saleForm.note} onChange={e=>setSaleForm({...saleForm,note:e.target.value})}/></div>
+          {saleForm.stockId && (Number(saleForm.qty)>0 || Number(saleForm.price)>0) && (()=>{
             const previewCost = channelAvgCost(state, channel.id, saleForm.stockId);
-            const p = calcSaleProfit(channel, Number(saleForm.qty)||0, Number(saleForm.revenue)||0, previewCost);
+            const previewRevenue = (Number(saleForm.qty)||0)*(Number(saleForm.price)||0);
+            const p = calcSaleProfit(channel, Number(saleForm.qty)||0, previewRevenue, previewCost);
             return (
               <div style={{ padding:'12px 14px', background:'var(--paper-deep)', borderRadius:8, display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, fontSize:12 }}>
                 <div><div className="muted" style={{ fontSize:11 }}>未稅業績</div><div className="mono" style={{ fontWeight:700 }}>{fmtMoney(Math.round(p.untaxed))}</div></div>
