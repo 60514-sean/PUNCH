@@ -98,10 +98,15 @@ function calcSaleProfit(channel, qty, revenue, unitCost) {
 const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
   const [subTab, setSubTab] = useStateCH('stock'); // stock | sales | analysis
   const [restockOpen, setRestockOpen] = useStateCH(false);
-  const [restockForm, setRestockForm] = useStateCH({ stockId:'', qty:'', cost:'', date:new Date().toISOString().slice(0,10), note:'' });
+  const [restockForm, setRestockForm] = useStateCH({ stockId:'', newName:'', qty:'', cost:'', date:new Date().toISOString().slice(0,10), note:'' });
   const [restockEdit, setRestockEdit] = useStateCH(null);
+  const [openingOpen, setOpeningOpen] = useStateCH(false);
+  const [openingForm, setOpeningForm] = useStateCH({ stockId:'', newName:'', qty:'' });
   const [saleOpen, setSaleOpen] = useStateCH(false);
-  const [saleForm, setSaleForm] = useStateCH({ id:null, productId:'', stockId:'', month:new Date().toISOString().slice(0,7), qty:'', price:'', note:'' });
+  const [saleMonth, setSaleMonth] = useStateCH(new Date().toISOString().slice(0,7));
+  const [saleRows, setSaleRows] = useStateCH([]);
+  const [saleEditOpen, setSaleEditOpen] = useStateCH(false);
+  const [saleEditForm, setSaleEditForm] = useStateCH({ id:null, productId:'', stockId:'', month:'', qty:'', price:'', note:'' });
 
   const goodsStocks = state.stocks.filter(s=>!s._deleted && s.kind==='goods').sort((a,b)=>strokeCollatorCH.compare(a.name, b.name));
   // 月銷售品項改抓「產品管理」清單；透過產品上的 stockId 連結取得「庫存管理」品項以維持扣庫存邏輯
@@ -111,27 +116,70 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
   const restocks = (state.channelRestocks||[]).filter(r=>r.channelId===channel.id && !r._deleted).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const sales = (state.channelSales||[]).filter(r=>r.channelId===channel.id && !r._deleted).sort((a,b)=>(b.month||'').localeCompare(a.month||'') || (a.name||'').localeCompare(b.name||''));
 
-  const openRestock = () => { setRestockForm({ stockId: goodsStocks[0]?.id||'', qty:'', cost:'', date:new Date().toISOString().slice(0,10), note:'' }); setRestockOpen(true); };
+  const openRestock = () => { setRestockForm({ stockId: goodsStocks[0]?.id||'__new__', newName:'', qty:'', cost:'', date:new Date().toISOString().slice(0,10), note:'' }); setRestockOpen(true); };
   const saveRestock = () => {
-    const stockItem = state.stocks.find(s=>s.id===restockForm.stockId);
     const qty = Number(restockForm.qty)||0;
-    if (!stockItem) { toast('請選擇品項'); return; }
     if (!qty) { toast('請輸入數量'); return; }
+    const isNew = restockForm.stockId==='__new__';
+    const newName = isNew ? (restockForm.newName||'').trim() : '';
+    if (isNew && !newName) { toast('請輸入新品項名稱'); return; }
+    if (!isNew && !state.stocks.find(s=>s.id===restockForm.stockId)) { toast('請選擇品項'); return; }
     const date = restockForm.date || new Date().toISOString().slice(0,10);
     setState(s=>{
-      const stocksNext = s.stocks.map(x=> x.id===stockItem.id ? { ...x, qty:Math.max(0,x.qty-qty), updated:date } : x);
-      const warehouseLog = { id:uid(), stockId:stockItem.id, name:stockItem.name, type:'out', qty, note:'出貨至通路：'+channel.name+(restockForm.note?'（'+restockForm.note+'）':''), date };
+      let stocksNext = s.stocks;
+      let stockId = restockForm.stockId;
+      let name;
+      if (isNew) {
+        stockId = uid();
+        name = newName;
+        stocksNext = [{ id:stockId, kind:'goods', name, cat:'', unit:'', qty:0, min:0, price:0, updated:date }, ...s.stocks];
+      } else {
+        const stockItem = s.stocks.find(x=>x.id===stockId);
+        name = stockItem.name;
+        stocksNext = s.stocks.map(x=> x.id===stockId ? { ...x, qty:Math.max(0,x.qty-qty), updated:date } : x);
+      }
+      const warehouseLog = { id:uid(), stockId, name, type:'out', qty, note:'出貨至通路：'+channel.name+(restockForm.note?'（'+restockForm.note+'）':''), date };
       let found = false;
       let chStock = (s.channelStock||[]).map(r=>{
-        if (r.channelId===channel.id && r.stockId===stockItem.id) { found = true; return { ...r, qty:r.qty+qty }; }
+        if (r.channelId===channel.id && r.stockId===stockId) { found = true; return { ...r, qty:r.qty+qty }; }
         return r;
       });
-      if (!found) chStock = [...chStock, { id:uid(), channelId:channel.id, stockId:stockItem.id, name:stockItem.name, qty }];
-      const restockRec = { id:uid(), channelId:channel.id, stockId:stockItem.id, name:stockItem.name, qty, cost:Number(restockForm.cost)||0, date, note:restockForm.note||'' };
+      if (!found) chStock = [...chStock, { id:uid(), channelId:channel.id, stockId, name, qty }];
+      const restockRec = { id:uid(), channelId:channel.id, stockId, name, qty, cost:Number(restockForm.cost)||0, date, note:restockForm.note||'' };
       return { ...s, stocks: stocksNext, logs:[warehouseLog, ...s.logs], channelStock: chStock, channelRestocks:[restockRec, ...(s.channelRestocks||[])] };
     });
-    toast('已登記進貨');
+    toast(isNew?'已新增品項並登記進貨':'已登記進貨');
     setRestockOpen(false);
+  };
+  const openOpening = () => { setOpeningForm({ stockId: goodsStocks[0]?.id||'__new__', newName:'', qty:'' }); setOpeningOpen(true); };
+  const saveOpening = () => {
+    const qty = Number(openingForm.qty)||0;
+    if (qty<0) { toast('數量不可為負數'); return; }
+    const isNew = openingForm.stockId==='__new__';
+    const newName = isNew ? (openingForm.newName||'').trim() : '';
+    if (isNew && !newName) { toast('請輸入新品項名稱'); return; }
+    if (!isNew && !state.stocks.find(s=>s.id===openingForm.stockId)) { toast('請選擇品項'); return; }
+    setState(s=>{
+      let stocksNext = s.stocks;
+      let stockId = openingForm.stockId;
+      let name;
+      if (isNew) {
+        stockId = uid();
+        name = newName;
+        stocksNext = [{ id:stockId, kind:'goods', name, cat:'', unit:'', qty:0, min:0, price:0, updated:new Date().toISOString().slice(0,10) }, ...s.stocks];
+      } else {
+        name = s.stocks.find(x=>x.id===stockId).name;
+      }
+      let found = false;
+      let chStock = (s.channelStock||[]).map(r=>{
+        if (r.channelId===channel.id && r.stockId===stockId) { found = true; return { ...r, qty, name }; }
+        return r;
+      });
+      if (!found) chStock = [...chStock, { id:uid(), channelId:channel.id, stockId, name, qty }];
+      return { ...s, stocks: stocksNext, channelStock: chStock };
+    });
+    toast(isNew?'已新增品項並設定原始庫存':'已設定原始庫存');
+    setOpeningOpen(false);
   };
   const saveRestockEditFn = () => {
     if (!restockEdit) return;
@@ -152,62 +200,104 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
     setRestockEdit(null);
   };
 
-  const openSaleNew = () => {
+  const emptySaleRow = () => {
     const firstP = saleProducts[0];
     const matched = stockOfProduct(firstP);
-    setSaleForm({ id:null, productId:firstP?.id||'', stockId:matched?matched.id:'', month:new Date().toISOString().slice(0,7), qty:'', price:'', note:'' });
+    return { rowId:uid(), productId:firstP?.id||'', stockId:matched?matched.id:'', qty:'', price:'', note:'' };
+  };
+  const openSaleNew = () => {
+    setSaleMonth(new Date().toISOString().slice(0,7));
+    setSaleRows([emptySaleRow()]);
     setSaleOpen(true);
+  };
+  const addSaleRow = () => setSaleRows(rows=>[...rows, emptySaleRow()]);
+  const removeSaleRow = (rowId) => setSaleRows(rows=>rows.filter(r=>r.rowId!==rowId));
+  const updateSaleRow = (rowId, patch) => setSaleRows(rows=>rows.map(r=>r.rowId===rowId?{...r,...patch}:r));
+  const pickRowProduct = (rowId, productId) => {
+    const product = saleProducts.find(p=>p.id===productId);
+    const matched = stockOfProduct(product);
+    if (product && !matched) toast('此產品尚未連結庫存管理品項，請先到「產品管理」設定連結');
+    updateSaleRow(rowId, { productId, stockId: matched?matched.id:'', price:'' });
+  };
+  const saveSaleBatch = () => {
+    const validRows = saleRows.filter(r=>r.stockId && Number(r.qty)>0);
+    if (!validRows.length) { toast('請至少填寫一筆有效品項（需選品項與數量）'); return; }
+    setState(s=>{
+      let chStock = s.channelStock||[];
+      const newRecs = validRows.map(r=>{
+        const stockItem = state.stocks.find(x=>x.id===r.stockId);
+        const qty = Number(r.qty)||0;
+        const price = Number(r.price)||0;
+        const revenue = qty * price;
+        const unitCost = channelAvgCost(state, channel.id, r.stockId);
+        chStock = chStock.map(cr=> (cr.channelId===channel.id && cr.stockId===r.stockId) ? { ...cr, qty:Math.max(0, cr.qty-qty) } : cr);
+        return { id:uid(), channelId:channel.id, stockId:r.stockId, name:stockItem.name, month:saleMonth, qty, price, revenue, unitCost, note:r.note||'' };
+      });
+      return { ...s, channelSales: [...newRecs, ...(s.channelSales||[])], channelStock: chStock };
+    });
+    toast(`已新增 ${validRows.length} 筆月銷售`);
+    setSaleOpen(false);
   };
   const openSaleEdit = (rec) => {
     const price = rec.price!=null ? rec.price : (rec.qty ? Math.round((rec.revenue/rec.qty)*100)/100 : 0);
     const matchedProduct = saleProducts.find(p=>p.stockId===rec.stockId) || saleProducts.find(p=>p.name===rec.name);
-    setSaleForm({ id:rec.id, productId:matchedProduct?matchedProduct.id:'', stockId:rec.stockId, month:rec.month, qty:rec.qty, price, note:rec.note||'' });
-    setSaleOpen(true);
+    setSaleEditForm({ id:rec.id, productId:matchedProduct?matchedProduct.id:'', stockId:rec.stockId, month:rec.month, qty:rec.qty, price, note:rec.note||'' });
+    setSaleEditOpen(true);
   };
-  const pickSaleProduct = (productId) => {
+  const pickEditProduct = (productId) => {
     const product = saleProducts.find(p=>p.id===productId);
     const matched = stockOfProduct(product);
     if (product && !matched) toast('此產品尚未連結庫存管理品項，請先到「產品管理」設定連結');
-    setSaleForm({ ...saleForm, productId, stockId: matched?matched.id:'', price:'' });
+    setSaleEditForm({ ...saleEditForm, productId, stockId: matched?matched.id:'', price:'' });
   };
-  const saveSale = () => {
-    const stockItem = state.stocks.find(s=>s.id===saleForm.stockId);
+  const saveSaleEdit = () => {
+    const stockItem = state.stocks.find(s=>s.id===saleEditForm.stockId);
     if (!stockItem) { toast('請選擇品項'); return; }
-    const qty = Number(saleForm.qty)||0;
-    const price = Number(saleForm.price)||0;
+    const qty = Number(saleEditForm.qty)||0;
+    const price = Number(saleEditForm.price)||0;
     const revenue = qty * price;
-    const month = saleForm.month || new Date().toISOString().slice(0,7);
     const unitCost = channelAvgCost(state, channel.id, stockItem.id);
     setState(s=>{
-      let salesNext = s.channelSales||[];
-      let delta = qty;
-      if (saleForm.id) {
-        const old = salesNext.find(x=>x.id===saleForm.id);
-        delta = qty - (old ? Number(old.qty)||0 : 0);
-        salesNext = salesNext.map(x=> x.id===saleForm.id ? { ...x, qty, price, revenue, unitCost, note:saleForm.note||'' } : x);
-      } else {
-        salesNext = [{ id:uid(), channelId:channel.id, stockId:stockItem.id, name:stockItem.name, month, qty, price, revenue, unitCost, note:saleForm.note||'' }, ...salesNext];
-      }
+      const old = (s.channelSales||[]).find(x=>x.id===saleEditForm.id);
+      const delta = qty - (old ? Number(old.qty)||0 : 0);
+      const salesNext = (s.channelSales||[]).map(x=> x.id===saleEditForm.id ? { ...x, qty, price, revenue, unitCost, note:saleEditForm.note||'' } : x);
       const chStock = (s.channelStock||[]).map(r=> (r.channelId===channel.id && r.stockId===stockItem.id) ? { ...r, qty:Math.max(0, r.qty-delta) } : r);
       return { ...s, channelSales: salesNext, channelStock: chStock };
     });
-    toast(saleForm.id?'已更新':'已新增');
-    setSaleOpen(false);
+    toast('已更新');
+    setSaleEditOpen(false);
   };
   const handleDeleteSale = () => {
-    if (!saleForm.id) return;
+    if (!saleEditForm.id) return;
     if (!confirm('刪除此筆銷售紀錄？將把數量加回通路庫存。')) return;
     setState(s=>{
-      const chStock = (s.channelStock||[]).map(r=> (r.channelId===channel.id && r.stockId===saleForm.stockId) ? { ...r, qty:r.qty+(Number(saleForm.qty)||0) } : r);
-      return { ...s, channelStock: chStock, channelSales: (s.channelSales||[]).filter(x=>x.id!==saleForm.id) };
+      const chStock = (s.channelStock||[]).map(r=> (r.channelId===channel.id && r.stockId===saleEditForm.stockId) ? { ...r, qty:r.qty+(Number(saleEditForm.qty)||0) } : r);
+      return { ...s, channelStock: chStock, channelSales: (s.channelSales||[]).filter(x=>x.id!==saleEditForm.id) };
     });
     toast('已刪除，數量已還原');
-    setSaleOpen(false);
+    setSaleEditOpen(false);
   };
 
   const salesWithProfit = useMemoCH(()=>{
     return sales.map(r=>({ ...r, ...calcSaleProfit(channel, r.qty, r.revenue, r.unitCost!=null?r.unitCost:channelAvgCost(state, channel.id, r.stockId)) }));
   }, [sales, channel, state]);
+
+  const salesByMonth = useMemoCH(()=>{
+    const map = new Map();
+    salesWithProfit.forEach(r=>{
+      if (!map.has(r.month)) map.set(r.month, []);
+      map.get(r.month).push(r);
+    });
+    return Array.from(map.entries())
+      .sort((a,b)=>b[0].localeCompare(a[0]))
+      .map(([month, rows])=>({
+        month,
+        rows: [...rows].sort((a,b)=>(a.name||'').localeCompare(b.name||'')),
+        qty: rows.reduce((a,r)=>a+(Number(r.qty)||0),0),
+        revenue: rows.reduce((a,r)=>a+(Number(r.revenue)||0),0),
+        profit: rows.reduce((a,r)=>a+r.profit,0),
+      }));
+  }, [salesWithProfit]);
 
   const revenueTrend = useMemoCH(()=>{
     const months = last6MonthsCH();
@@ -249,7 +339,10 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
         <div className="card">
           <div className="card-head">
             <div className="card-title">通路庫存</div>
-            <button className="btn btn-primary btn-sm" onClick={openRestock}><Icon name="plus" size={13}/> 登記進貨</button>
+            <div style={{ display:'flex', gap:8 }}>
+              <button className="btn btn-ghost btn-sm" onClick={openOpening}><Icon name="edit" size={13}/> 設定原始庫存</button>
+              <button className="btn btn-primary btn-sm" onClick={openRestock}><Icon name="plus" size={13}/> 登記進貨</button>
+            </div>
           </div>
           <table className="tbl desk-only">
             <thead><tr><th>品項</th><th style={{ textAlign:'right' }}>目前在此通路庫存</th></tr></thead>
@@ -308,34 +401,39 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
             <div className="card-title">每月銷售紀錄（依品項）</div>
             <button className="btn btn-primary btn-sm" onClick={openSaleNew}><Icon name="plus" size={13}/> 新增月銷售</button>
           </div>
-          <table className="tbl desk-only">
-            <thead><tr><th>月份</th><th>品項</th><th style={{ textAlign:'right' }}>數量</th><th style={{ textAlign:'right' }}>業績（含稅）</th><th style={{ textAlign:'right' }}>淨利</th><th>備註</th></tr></thead>
-            <tbody>
-              {salesWithProfit.map(r=>(
-                <tr key={r.id} style={{ cursor:'pointer' }} onClick={()=>openSaleEdit(r)}>
-                  <td className="mono">{monthLabelCH(r.month)} <span style={{ color:'var(--ink-faint)', fontSize:11 }}>{r.month}</span></td>
-                  <td>{r.name}</td>
-                  <td className="num">{r.qty}</td>
-                  <td className="num" style={{ fontWeight:700 }}>{fmtMoney(r.revenue,true)}</td>
-                  <td className="num" style={{ fontWeight:700, color: r.profit>=0?'var(--moss)':'var(--terracotta)' }}>{fmtMoney(Math.round(r.profit),true)}</td>
-                  <td style={{ fontSize:12, color:'var(--ink-soft)' }}>{r.note}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="mob-cards">
-            {salesWithProfit.map(r=>(
-              <div key={r.id} className="mob-card" style={{ cursor:'pointer' }} onClick={()=>openSaleEdit(r)}>
-                <div style={{ display:'flex', justifyContent:'space-between' }}>
-                  <div><div style={{ fontWeight:600 }}>{r.name}</div><div style={{ fontSize:11, color:'var(--ink-mute)' }}>{monthLabelCH(r.month)} · {r.qty} 件</div></div>
+          {salesByMonth.map(g=>(
+            <div key={g.month} className="month-group">
+              <div className="month-group-head">
+                <div style={{ display:'flex', alignItems:'baseline', gap:8 }}>
+                  <span style={{ fontFamily:'var(--f-serif)', fontSize:19, fontWeight:700 }}>{monthLabelCH(g.month)}</span>
+                  <span className="mono" style={{ fontSize:11, color:'var(--ink-faint)' }}>{g.month}</span>
+                  <span className="pill" style={{ fontSize:11 }}>{g.qty} 件</span>
+                </div>
+                <div style={{ display:'flex', gap:20, alignItems:'center' }}>
                   <div style={{ textAlign:'right' }}>
+                    <div style={{ fontSize:10, color:'var(--ink-mute)' }}>業績（含稅）</div>
+                    <div className="mono" style={{ fontWeight:700 }}>{fmtMoney(g.revenue,true)}</div>
+                  </div>
+                  <div style={{ textAlign:'right' }}>
+                    <div style={{ fontSize:10, color:'var(--ink-mute)' }}>淨利</div>
+                    <div className="mono" style={{ fontWeight:700, color: g.profit>=0?'var(--moss)':'var(--terracotta)' }}>{fmtMoney(Math.round(g.profit),true)}</div>
+                  </div>
+                </div>
+              </div>
+              {g.rows.map(r=>(
+                <div key={r.id} className="month-group-row" onClick={()=>openSaleEdit(r)}>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontWeight:600 }}>{r.name}</div>
+                    <div style={{ fontSize:11, color:'var(--ink-mute)' }}>{r.qty} 件{r.note?' · '+r.note:''}</div>
+                  </div>
+                  <div style={{ textAlign:'right', flexShrink:0 }}>
                     <div className="mono" style={{ fontWeight:700 }}>{fmtMoney(r.revenue,true)}</div>
                     <div className="mono" style={{ fontSize:11, color: r.profit>=0?'var(--moss)':'var(--terracotta)' }}>淨利 {fmtMoney(Math.round(r.profit),true)}</div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ))}
           {sales.length===0 && <EmptyState icon="finance" title="尚無銷售紀錄" hint="新增本月的品項銷售資料"/>}
         </div>
       )}
@@ -394,6 +492,27 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
         </>
       )}
 
+      {/* 設定原始庫存 */}
+      <Modal open={openingOpen} onClose={()=>setOpeningOpen(false)} title="設定原始庫存"
+        footer={<><div style={{ flex:1 }}/><button className="btn btn-ghost" onClick={()=>setOpeningOpen(false)}>取消</button><button className="btn btn-primary" onClick={saveOpening}>儲存</button></>}>
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <div className="field"><label>品項<span className="req">*</span></label>
+            <select className="select" value={openingForm.stockId} onChange={e=>setOpeningForm({...openingForm,stockId:e.target.value})}>
+              {goodsStocks.length===0 && <option value="">尚無商品庫存品項</option>}
+              {goodsStocks.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+              <option value="__new__">+ 新增此通路專屬新品項…</option>
+            </select>
+          </div>
+          {openingForm.stockId==='__new__' && (
+            <div className="field"><label>新品項名稱<span className="req">*</span></label>
+              <input className="input" value={openingForm.newName} onChange={e=>setOpeningForm({...openingForm,newName:e.target.value})} placeholder="例：快閃限定紀念杯"/>
+            </div>
+          )}
+          <div className="field"><label>此通路目前實際庫存數量</label><input className="input mono" type="number" value={openingForm.qty} onChange={e=>setOpeningForm({...openingForm,qty:e.target.value})}/></div>
+          <div style={{ fontSize:11, color:'var(--ink-mute)' }}>直接設定此通路的庫存數字，不會扣「庫存管理」倉庫、也不會產生進貨紀錄。適合第一次啟用系統時，登記通路現場已有的庫存；選「新增此通路專屬新品項」則會同步在「庫存管理」建立這個品項（倉庫庫存從 0 開始）。之後的進出貨請用「登記進貨」與「新增月銷售」。</div>
+        </div>
+      </Modal>
+
       {/* 登記進貨 */}
       <Modal open={restockOpen} onClose={()=>setRestockOpen(false)} title="登記進貨"
         footer={<><div style={{ flex:1 }}/><button className="btn btn-ghost" onClick={()=>setRestockOpen(false)}>取消</button><button className="btn btn-primary" onClick={saveRestock}>儲存</button></>}>
@@ -402,8 +521,14 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
             <select className="select" value={restockForm.stockId} onChange={e=>setRestockForm({...restockForm,stockId:e.target.value})}>
               {goodsStocks.length===0 && <option value="">尚無商品庫存品項</option>}
               {goodsStocks.map(s=><option key={s.id} value={s.id}>{s.name}（倉庫現有 {s.qty}）</option>)}
+              <option value="__new__">+ 新增此通路專屬新品項…</option>
             </select>
           </div>
+          {restockForm.stockId==='__new__' && (
+            <div className="field"><label>新品項名稱<span className="req">*</span></label>
+              <input className="input" value={restockForm.newName} onChange={e=>setRestockForm({...restockForm,newName:e.target.value})} placeholder="例：快閃限定紀念杯"/>
+            </div>
+          )}
           <div className="row">
             <div className="field"><label>進貨數量</label><input className="input mono" type="number" value={restockForm.qty} onChange={e=>setRestockForm({...restockForm,qty:e.target.value})}/></div>
             <div className="field"><label>本批總成本（選填）</label><input className="input mono" type="number" value={restockForm.cost} onChange={e=>setRestockForm({...restockForm,cost:e.target.value})}/></div>
@@ -412,7 +537,7 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
             <div className="field"><label>日期</label><input className="input" type="date" value={restockForm.date} onChange={e=>setRestockForm({...restockForm,date:e.target.value})}/></div>
             <div className="field"><label>備註</label><input className="input" value={restockForm.note} onChange={e=>setRestockForm({...restockForm,note:e.target.value})}/></div>
           </div>
-          <div style={{ fontSize:11, color:'var(--ink-mute)' }}>進貨會從「庫存管理」倉庫扣除對應數量，並記錄一筆出貨紀錄。填寫總成本可用於估算此通路的單位進貨成本與銷售淨利。</div>
+          <div style={{ fontSize:11, color:'var(--ink-mute)' }}>進貨會從「庫存管理」倉庫扣除對應數量，並記錄一筆出貨紀錄。填寫總成本可用於估算此通路的單位進貨成本與銷售淨利；選「新增此通路專屬新品項」會先在「庫存管理」建立品項（倉庫庫存從 0 開始）再登記出貨。</div>
         </div>
       </Modal>
 
@@ -433,45 +558,114 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
         )}
       </Modal>
 
-      {/* 新增/編輯 月銷售 */}
-      <Modal open={saleOpen} onClose={()=>setSaleOpen(false)} title={saleForm.id?'編輯月銷售':'新增月銷售'}
+      {/* 新增月銷售（可一次新增多筆品項） */}
+      <Modal open={saleOpen} onClose={()=>setSaleOpen(false)} title="新增月銷售"
         footer={<>
-          {saleForm.id && <button className="btn btn-danger" onClick={handleDeleteSale}><Icon name="trash" size={13}/> 刪除</button>}
           <div style={{ flex:1 }}/>
           <button className="btn btn-ghost" onClick={()=>setSaleOpen(false)}>取消</button>
-          <button className="btn btn-primary" onClick={saveSale}>儲存</button>
+          <button className="btn btn-primary" onClick={saveSaleBatch}>儲存全部</button>
+        </>}>
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <div className="field" style={{ maxWidth:220 }}><label>月份</label><input className="input" type="month" value={saleMonth} onChange={e=>setSaleMonth(e.target.value)}/></div>
+          <div style={{ overflowX:'auto' }}>
+            <table className="tbl" style={{ minWidth:640 }}>
+              <thead>
+                <tr>
+                  <th style={{ minWidth:160 }}>品項</th>
+                  <th style={{ width:90, textAlign:'right' }}>數量</th>
+                  <th style={{ width:110, textAlign:'right' }}>售價（含稅）</th>
+                  <th style={{ width:110, textAlign:'right' }}>業績（自動）</th>
+                  <th style={{ width:120, textAlign:'right' }}>預估淨利</th>
+                  <th style={{ minWidth:120 }}>備註</th>
+                  <th style={{ width:36 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {saleRows.map((row, idx) => {
+                  const unitCost = row.stockId ? channelAvgCost(state, channel.id, row.stockId) : 0;
+                  const revenue = (Number(row.qty)||0)*(Number(row.price)||0);
+                  const p = calcSaleProfit(channel, Number(row.qty)||0, revenue, unitCost);
+                  return (
+                    <tr key={row.rowId}>
+                      <td>
+                        <select className="select" style={{ width:'100%' }} value={row.productId} onChange={e=>pickRowProduct(row.rowId, e.target.value)}>
+                          {saleProducts.length===0 && <option value="">尚無產品成本項目</option>}
+                          {saleProducts.map(sp=><option key={sp.id} value={sp.id}>{sp.name}</option>)}
+                        </select>
+                      </td>
+                      <td><input className="input mono" style={{ width:'100%', textAlign:'right' }} type="number" value={row.qty} onChange={e=>updateSaleRow(row.rowId,{qty:e.target.value})}/></td>
+                      <td><input className="input mono" style={{ width:'100%', textAlign:'right' }} type="number" value={row.price} onChange={e=>updateSaleRow(row.rowId,{price:e.target.value})}/></td>
+                      <td className="num mono" style={{ fontWeight:700 }}>{fmtMoney(revenue)}</td>
+                      <td className="num mono" style={{ fontWeight:700, color: p.profit>=0?'var(--moss)':'var(--terracotta)' }}>{revenue?fmtMoney(Math.round(p.profit)):'-'}</td>
+                      <td><input className="input" style={{ width:'100%' }} value={row.note} onChange={e=>updateSaleRow(row.rowId,{note:e.target.value})}/></td>
+                      <td>{saleRows.length>1 && <button className="btn btn-ghost btn-sm" onClick={()=>removeSaleRow(row.rowId)}><Icon name="trash" size={13}/></button>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              {saleRows.length>1 && (()=>{
+                const totalRevenue = saleRows.reduce((a,r)=>a+(Number(r.qty)||0)*(Number(r.price)||0),0);
+                const totalProfit = saleRows.reduce((a,r)=>{
+                  const unitCost = r.stockId ? channelAvgCost(state, channel.id, r.stockId) : 0;
+                  const revenue = (Number(r.qty)||0)*(Number(r.price)||0);
+                  return a + calcSaleProfit(channel, Number(r.qty)||0, revenue, unitCost).profit;
+                },0);
+                return (
+                  <tfoot>
+                    <tr>
+                      <td colSpan={3} style={{ textAlign:'right', fontWeight:700 }}>合計</td>
+                      <td className="num mono" style={{ fontWeight:700 }}>{fmtMoney(totalRevenue)}</td>
+                      <td className="num mono" style={{ fontWeight:700, color: totalProfit>=0?'var(--moss)':'var(--terracotta)' }}>{fmtMoney(Math.round(totalProfit))}</td>
+                      <td colSpan={2}></td>
+                    </tr>
+                  </tfoot>
+                );
+              })()}
+            </table>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={addSaleRow} style={{ alignSelf:'flex-start' }}><Icon name="plus" size={13}/> 再新增一筆品項</button>
+        </div>
+      </Modal>
+
+      {/* 編輯月銷售 */}
+      <Modal open={saleEditOpen} onClose={()=>setSaleEditOpen(false)} title="編輯月銷售"
+        footer={<>
+          <button className="btn btn-danger" onClick={handleDeleteSale}><Icon name="trash" size={13}/> 刪除</button>
+          <div style={{ flex:1 }}/>
+          <button className="btn btn-ghost" onClick={()=>setSaleEditOpen(false)}>取消</button>
+          <button className="btn btn-primary" onClick={saveSaleEdit}>儲存</button>
         </>}>
         <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
           <div className="field"><label>品項<span className="req">*</span></label>
-            <select className="select" value={saleForm.productId} disabled={!!saleForm.id} onChange={e=>pickSaleProduct(e.target.value)}>
+            <select className="select" value={saleEditForm.productId} disabled onChange={e=>pickEditProduct(e.target.value)}>
               {saleProducts.length===0 && <option value="">尚無產品成本項目</option>}
               {saleProducts.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-              {saleForm.id && !saleProducts.some(p=>p.id===saleForm.productId) &&
-                <option value={saleForm.productId}>{(state.stocks.find(s=>s.id===saleForm.stockId)||{}).name || '（原品項）'}</option>}
+              {!saleProducts.some(p=>p.id===saleEditForm.productId) &&
+                <option value={saleEditForm.productId}>{(state.stocks.find(s=>s.id===saleEditForm.stockId)||{}).name || '（原品項）'}</option>}
             </select>
           </div>
           <div className="row">
-            <div className="field"><label>月份</label><input className="input" type="month" value={saleForm.month} disabled={!!saleForm.id} onChange={e=>setSaleForm({...saleForm,month:e.target.value})}/></div>
-            <div className="field"><label>銷售數量</label><input className="input mono" type="number" value={saleForm.qty} onChange={e=>setSaleForm({...saleForm,qty:e.target.value})}/></div>
+            <div className="field"><label>月份</label><input className="input" type="month" value={saleEditForm.month} disabled/></div>
+            <div className="field"><label>銷售數量</label><input className="input mono" type="number" value={saleEditForm.qty} onChange={e=>setSaleEditForm({...saleEditForm,qty:e.target.value})}/></div>
           </div>
-          {saleForm.stockId && (
+          {saleEditForm.stockId && (
             <div style={{ fontSize:11, color:'var(--ink-mute)' }}>
-              此品項在本通路目前平均進貨成本：<strong className="mono" style={{ color:'var(--ink)' }}>{fmtMoney(Math.round(channelAvgCost(state, channel.id, saleForm.stockId)))}</strong>／單，請自行輸入售價
+              此品項在本通路目前平均進貨成本：<strong className="mono" style={{ color:'var(--ink)' }}>{fmtMoney(Math.round(channelAvgCost(state, channel.id, saleEditForm.stockId)))}</strong>／單，請自行輸入售價
             </div>
           )}
           <div className="row">
-            <div className="field"><label>售價（含稅／單）</label><input className="input mono" type="number" value={saleForm.price} onChange={e=>setSaleForm({...saleForm,price:e.target.value})}/></div>
+            <div className="field"><label>售價（含稅／單）</label><input className="input mono" type="number" value={saleEditForm.price} onChange={e=>setSaleEditForm({...saleEditForm,price:e.target.value})}/></div>
             <div className="field"><label>業績金額（含稅，自動計算）</label>
               <div className="input mono" style={{ background:'var(--paper-deep)', display:'flex', alignItems:'center', fontWeight:700 }}>
-                {fmtMoney((Number(saleForm.qty)||0)*(Number(saleForm.price)||0))}
+                {fmtMoney((Number(saleEditForm.qty)||0)*(Number(saleEditForm.price)||0))}
               </div>
             </div>
           </div>
-          <div className="field"><label>備註</label><input className="input" value={saleForm.note} onChange={e=>setSaleForm({...saleForm,note:e.target.value})}/></div>
-          {saleForm.stockId && (Number(saleForm.qty)>0 || Number(saleForm.price)>0) && (()=>{
-            const previewCost = channelAvgCost(state, channel.id, saleForm.stockId);
-            const previewRevenue = (Number(saleForm.qty)||0)*(Number(saleForm.price)||0);
-            const p = calcSaleProfit(channel, Number(saleForm.qty)||0, previewRevenue, previewCost);
+          <div className="field"><label>備註</label><input className="input" value={saleEditForm.note} onChange={e=>setSaleEditForm({...saleEditForm,note:e.target.value})}/></div>
+          {saleEditForm.stockId && (Number(saleEditForm.qty)>0 || Number(saleEditForm.price)>0) && (()=>{
+            const previewCost = channelAvgCost(state, channel.id, saleEditForm.stockId);
+            const previewRevenue = (Number(saleEditForm.qty)||0)*(Number(saleEditForm.price)||0);
+            const p = calcSaleProfit(channel, Number(saleEditForm.qty)||0, previewRevenue, previewCost);
             return (
               <div style={{ padding:'12px 14px', background:'var(--paper-deep)', borderRadius:8, display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, fontSize:12 }}>
                 <div><div className="muted" style={{ fontSize:11 }}>通路抽成</div><div className="mono" style={{ fontWeight:700 }}>{fmtMoney(Math.round(p.fee))}</div></div>

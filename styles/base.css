@@ -699,6 +699,13 @@ body.forced-mobile .row, body.forced-mobile .row-3 { grid-template-columns: 1fr 
 .mob-card:hover { border-color: var(--ink-faint); }
 .mob-card:active { transform: translateY(1px); }
 
+/* ═══ Month-grouped record list (channel monthly sales) ═══ */
+.month-group { background: var(--paper-soft); border: 1px solid var(--rule-soft); border-radius: var(--r-lg); overflow: hidden; margin-bottom: 14px; }
+.month-group-head { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; padding: 12px 16px; background: var(--paper-deep); border-bottom: 1px solid var(--rule-soft); }
+.month-group-row { display:flex; justify-content:space-between; align-items:center; gap:12px; padding: 12px 16px; cursor:pointer; transition: background 0.12s; }
+.month-group-row:hover { background: var(--paper-deep); }
+.month-group-row + .month-group-row { border-top: 1px dashed var(--rule-soft); }
+
 @media (max-width: 900px) {
   .desk-only { display: none !important; }
   .mob-cards { display: flex !important; }
