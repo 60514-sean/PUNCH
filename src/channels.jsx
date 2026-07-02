@@ -583,15 +583,15 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
                     {saleProducts.map(sp=><option key={sp.id} value={sp.id}>{sp.name}</option>)}
                   </select>
                 </div>
-                <div className="row">
-                  <div className="field"><label>數量</label><input className="input mono" type="number" value={row.qty} onChange={e=>updateSaleRow(row.rowId,{qty:e.target.value})}/></div>
-                  <div className="field"><label>售價（含稅／單）</label><input className="input mono" type="number" value={row.price} onChange={e=>updateSaleRow(row.rowId,{price:e.target.value})}/></div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                  <div className="field" style={{ minWidth:0 }}><label>數量</label><input className="input mono" type="number" value={row.qty} onChange={e=>updateSaleRow(row.rowId,{qty:e.target.value})}/></div>
+                  <div className="field" style={{ minWidth:0 }}><label>售價（含稅／單）</label><input className="input mono" type="number" value={row.price} onChange={e=>updateSaleRow(row.rowId,{price:e.target.value})}/></div>
                 </div>
-                <div className="row">
-                  <div className="field"><label>業績（自動計算）</label>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                  <div className="field" style={{ minWidth:0 }}><label>業績（自動計算）</label>
                     <div className="input mono" style={{ background:'var(--paper-soft)', fontWeight:700, display:'flex', alignItems:'center' }}>{fmtMoney(revenue)}</div>
                   </div>
-                  <div className="field"><label>預估淨利</label>
+                  <div className="field" style={{ minWidth:0 }}><label>預估淨利</label>
                     <div className="input mono" style={{ background:'var(--paper-soft)', fontWeight:700, display:'flex', alignItems:'center', color: p.profit>=0?'var(--moss)':'var(--terracotta)' }}>{revenue?fmtMoney(Math.round(p.profit)):'-'}</div>
                   </div>
                 </div>
