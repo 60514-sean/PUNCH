@@ -567,62 +567,61 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
         </>}>
         <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
           <div className="field" style={{ maxWidth:220 }}><label>月份</label><input className="input" type="month" value={saleMonth} onChange={e=>setSaleMonth(e.target.value)}/></div>
-          <div style={{ overflowX:'auto' }}>
-            <table className="tbl" style={{ minWidth:640 }}>
-              <thead>
-                <tr>
-                  <th style={{ minWidth:160 }}>品項</th>
-                  <th style={{ width:90, textAlign:'right' }}>數量</th>
-                  <th style={{ width:110, textAlign:'right' }}>售價（含稅）</th>
-                  <th style={{ width:110, textAlign:'right' }}>業績（自動）</th>
-                  <th style={{ width:120, textAlign:'right' }}>預估淨利</th>
-                  <th style={{ minWidth:120 }}>備註</th>
-                  <th style={{ width:36 }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {saleRows.map((row, idx) => {
-                  const unitCost = row.stockId ? channelAvgCost(state, channel.id, row.stockId) : 0;
-                  const revenue = (Number(row.qty)||0)*(Number(row.price)||0);
-                  const p = calcSaleProfit(channel, Number(row.qty)||0, revenue, unitCost);
-                  return (
-                    <tr key={row.rowId}>
-                      <td>
-                        <select className="select" style={{ width:'100%' }} value={row.productId} onChange={e=>pickRowProduct(row.rowId, e.target.value)}>
-                          {saleProducts.length===0 && <option value="">尚無產品成本項目</option>}
-                          {saleProducts.map(sp=><option key={sp.id} value={sp.id}>{sp.name}</option>)}
-                        </select>
-                      </td>
-                      <td><input className="input mono" style={{ width:'100%', textAlign:'right' }} type="number" value={row.qty} onChange={e=>updateSaleRow(row.rowId,{qty:e.target.value})}/></td>
-                      <td><input className="input mono" style={{ width:'100%', textAlign:'right' }} type="number" value={row.price} onChange={e=>updateSaleRow(row.rowId,{price:e.target.value})}/></td>
-                      <td className="num mono" style={{ fontWeight:700 }}>{fmtMoney(revenue)}</td>
-                      <td className="num mono" style={{ fontWeight:700, color: p.profit>=0?'var(--moss)':'var(--terracotta)' }}>{revenue?fmtMoney(Math.round(p.profit)):'-'}</td>
-                      <td><input className="input" style={{ width:'100%' }} value={row.note} onChange={e=>updateSaleRow(row.rowId,{note:e.target.value})}/></td>
-                      <td>{saleRows.length>1 && <button className="btn btn-ghost btn-sm" onClick={()=>removeSaleRow(row.rowId)}><Icon name="trash" size={13}/></button>}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              {saleRows.length>1 && (()=>{
-                const totalRevenue = saleRows.reduce((a,r)=>a+(Number(r.qty)||0)*(Number(r.price)||0),0);
-                const totalProfit = saleRows.reduce((a,r)=>{
-                  const unitCost = r.stockId ? channelAvgCost(state, channel.id, r.stockId) : 0;
-                  const revenue = (Number(r.qty)||0)*(Number(r.price)||0);
-                  return a + calcSaleProfit(channel, Number(r.qty)||0, revenue, unitCost).profit;
-                },0);
-                return (
-                  <tfoot>
-                    <tr>
-                      <td colSpan={3} style={{ textAlign:'right', fontWeight:700 }}>合計</td>
-                      <td className="num mono" style={{ fontWeight:700 }}>{fmtMoney(totalRevenue)}</td>
-                      <td className="num mono" style={{ fontWeight:700, color: totalProfit>=0?'var(--moss)':'var(--terracotta)' }}>{fmtMoney(Math.round(totalProfit))}</td>
-                      <td colSpan={2}></td>
-                    </tr>
-                  </tfoot>
-                );
-              })()}
-            </table>
-          </div>
+          {saleRows.map((row, idx) => {
+            const unitCost = row.stockId ? channelAvgCost(state, channel.id, row.stockId) : 0;
+            const revenue = (Number(row.qty)||0)*(Number(row.price)||0);
+            const p = calcSaleProfit(channel, Number(row.qty)||0, revenue, unitCost);
+            return (
+              <div key={row.rowId} style={{ border:'1px solid var(--rule-soft)', borderRadius:'var(--r-lg)', background:'var(--paper-deep)', padding:14, display:'flex', flexDirection:'column', gap:10 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <span className="eyebrow">第 {idx+1} 筆</span>
+                  {saleRows.length>1 && <button className="btn btn-ghost btn-sm" onClick={()=>removeSaleRow(row.rowId)}><Icon name="trash" size={13}/> 移除</button>}
+                </div>
+                <div className="field"><label>品項<span className="req">*</span></label>
+                  <select className="select" value={row.productId} onChange={e=>pickRowProduct(row.rowId, e.target.value)}>
+                    {saleProducts.length===0 && <option value="">尚無產品成本項目</option>}
+                    {saleProducts.map(sp=><option key={sp.id} value={sp.id}>{sp.name}</option>)}
+                  </select>
+                </div>
+                <div className="row">
+                  <div className="field"><label>數量</label><input className="input mono" type="number" value={row.qty} onChange={e=>updateSaleRow(row.rowId,{qty:e.target.value})}/></div>
+                  <div className="field"><label>售價（含稅／單）</label><input className="input mono" type="number" value={row.price} onChange={e=>updateSaleRow(row.rowId,{price:e.target.value})}/></div>
+                </div>
+                <div className="row">
+                  <div className="field"><label>業績（自動計算）</label>
+                    <div className="input mono" style={{ background:'var(--paper-soft)', fontWeight:700, display:'flex', alignItems:'center' }}>{fmtMoney(revenue)}</div>
+                  </div>
+                  <div className="field"><label>預估淨利</label>
+                    <div className="input mono" style={{ background:'var(--paper-soft)', fontWeight:700, display:'flex', alignItems:'center', color: p.profit>=0?'var(--moss)':'var(--terracotta)' }}>{revenue?fmtMoney(Math.round(p.profit)):'-'}</div>
+                  </div>
+                </div>
+                <div className="field"><label>備註</label><input className="input" value={row.note} onChange={e=>updateSaleRow(row.rowId,{note:e.target.value})}/></div>
+              </div>
+            );
+          })}
+          {saleRows.length>1 && (()=>{
+            const totalRevenue = saleRows.reduce((a,r)=>a+(Number(r.qty)||0)*(Number(r.price)||0),0);
+            const totalProfit = saleRows.reduce((a,r)=>{
+              const unitCost = r.stockId ? channelAvgCost(state, channel.id, r.stockId) : 0;
+              const revenue = (Number(r.qty)||0)*(Number(r.price)||0);
+              return a + calcSaleProfit(channel, Number(r.qty)||0, revenue, unitCost).profit;
+            },0);
+            return (
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 14px', background:'var(--paper-deep)', border:'1px solid var(--rule-soft)', borderRadius:'var(--r-lg)' }}>
+                <span style={{ fontWeight:700 }}>合計</span>
+                <div style={{ display:'flex', gap:24 }}>
+                  <div style={{ textAlign:'right' }}>
+                    <div style={{ fontSize:10, color:'var(--ink-mute)' }}>業績</div>
+                    <div className="mono" style={{ fontWeight:700 }}>{fmtMoney(totalRevenue)}</div>
+                  </div>
+                  <div style={{ textAlign:'right' }}>
+                    <div style={{ fontSize:10, color:'var(--ink-mute)' }}>淨利</div>
+                    <div className="mono" style={{ fontWeight:700, color: totalProfit>=0?'var(--moss)':'var(--terracotta)' }}>{fmtMoney(Math.round(totalProfit))}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
           <button className="btn btn-ghost btn-sm" onClick={addSaleRow} style={{ alignSelf:'flex-start' }}><Icon name="plus" size={13}/> 再新增一筆品項</button>
         </div>
       </Modal>
