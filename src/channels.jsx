@@ -793,23 +793,39 @@ const ChannelsView = ({ state, setState }) => {
   const [form, setForm] = useStateCH(emptyCH());
   const [topTab, setTopTab] = useStateCH('list'); // list | analysis
   const [detailId, setDetailId] = useStateCH(null);
-  function emptyCH(){ return { id:'', name:'', type:'direct', fee:0, fee_unit:'%', sales:0, orders:0, note:'', active:true }; }
+  function emptyCH(){ return { id:'', name:'', type:'direct', fee:0, fee_unit:'%', note:'', active:true }; }
 
   const list = (state.channels || []).filter(c => !c._deleted);
-  const totals = useMemoCH(()=>{
-    const t = { sales:0, orders:0, fee:0, net:0 };
-    list.forEach(c => {
-      const fee = c.fee_unit==='%' ? c.sales * c.fee/100 : c.orders * c.fee;
-      t.sales += c.sales; t.orders += c.orders; t.fee += fee; t.net += (c.sales - fee);
+
+  // 每個通路的真實業績/淨利/銷售件數，來自「月銷售」實際登記的品項紀錄
+  const channelStats = useMemoCH(()=>{
+    return list.map(c => {
+      const recs = (state.channelSales||[]).filter(x=>!x._deleted && x.channelId===c.id);
+      let revenue = 0, profit = 0, fee = 0, qty = 0;
+      recs.forEach(x => {
+        const unitCost = x.unitCost!=null ? x.unitCost : channelAvgCost(state, c.id, x.stockId);
+        const p = calcSaleProfit(c, x.qty, x.revenue, unitCost);
+        revenue += Number(x.revenue)||0;
+        profit += p.profit;
+        fee += p.fee;
+        qty += Number(x.qty)||0;
+      });
+      return { id:c.id, revenue, profit, fee, qty };
     });
-    return t;
-  }, [list]);
+  }, [list, state.channelSales, state]);
+  const statsOf = (id) => channelStats.find(s=>s.id===id) || { revenue:0, profit:0, fee:0, qty:0 };
+
+  const totals = useMemoCH(()=>{
+    const t = { revenue:0, profit:0, fee:0, qty:0 };
+    channelStats.forEach(s => { t.revenue += s.revenue; t.profit += s.profit; t.fee += s.fee; t.qty += s.qty; });
+    return { ...t, net: t.revenue - t.fee };
+  }, [channelStats]);
 
   const openNew = () => { setForm(emptyCH()); setEditingId(null); setModalOpen(true); };
   const openEdit = (c) => { setForm({...c}); setEditingId(c.id); setModalOpen(true); };
   const save = () => {
     if (!form.name) { toast('請填寫通路名稱'); return; }
-    const rec = { ...form, fee:Number(form.fee)||0, sales:Number(form.sales)||0, orders:Number(form.orders)||0 };
+    const rec = { ...form, fee:Number(form.fee)||0 };
     if (editingId) setState(s=>({ ...s, channels: (s.channels||[]).map(x=>x.id===editingId?rec:x) }));
     else setState(s=>({ ...s, channels: [{...rec, id:uid()}, ...(s.channels||[])] }));
     toast(editingId?'已更新':'已新增');
@@ -817,7 +833,6 @@ const ChannelsView = ({ state, setState }) => {
   };
   const del = () => { if(!confirm('刪除此通路？將移至回收桶（保留 10 天）。'))return; setState(s=> window.softDel(s, 'channels', editingId)); setModalOpen(false); toast('已移至回收桶'); };
 
-  const maxSales = Math.max(...list.map(c=>c.sales), 1);
   const activeChannel = detailId ? list.find(c=>c.id===detailId) : null;
 
   return (
@@ -831,7 +846,7 @@ const ChannelsView = ({ state, setState }) => {
             <div className="topbar-l">
               <div className="eyebrow">業務</div>
               <h1 className="h1">通路控管</h1>
-              <div className="sub">{list.length} 個通路 · 總銷售 {fmtMoney(totals.sales,true)} · 扣除平台費淨收 {fmtMoney(totals.net,true)}</div>
+              <div className="sub">{list.length} 個通路 · 總業績 {fmtMoney(totals.revenue,true)} · 淨利 {fmtMoney(Math.round(totals.profit),true)}</div>
             </div>
             <div className="topbar-r">
               <button className={'btn btn-sm '+(topTab==='analysis'?'btn-ink':'btn-ghost')} onClick={()=>setTopTab(topTab==='analysis'?'list':'analysis')}>
@@ -847,10 +862,10 @@ const ChannelsView = ({ state, setState }) => {
             <>
               <div className="card flat" style={{ padding:0 }}>
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)' }} className="crm-stats">
-                  <div className="stat"><span className="lab">銷售總額</span><span className="val mono-val">{fmtMoney(totals.sales,true)}</span><span className="delta muted">所有通路</span></div>
-                  <div className="stat"><span className="lab">平台費用</span><span className="val mono-val" style={{ color:'var(--terracotta)' }}>{fmtMoney(totals.fee,true)}</span><span className="delta muted">{totals.sales?Math.round(totals.fee/totals.sales*100):0}% 佔比</span></div>
-                  <div className="stat"><span className="lab">實收淨額</span><span className="val mono-val" style={{ color:'var(--clay)' }}>{fmtMoney(totals.net,true)}</span><span className="delta muted">扣除手續費</span></div>
-                  <div className="stat"><span className="lab">訂單筆數</span><span className="val">{totals.orders}</span><span className="delta muted">平均單價 {fmtMoney(totals.orders?Math.round(totals.sales/totals.orders):0)}</span></div>
+                  <div className="stat"><span className="lab">業績總額（含稅）</span><span className="val mono-val">{fmtMoney(totals.revenue,true)}</span><span className="delta muted">所有通路</span></div>
+                  <div className="stat"><span className="lab">平台費用</span><span className="val mono-val" style={{ color:'var(--terracotta)' }}>{fmtMoney(Math.round(totals.fee),true)}</span><span className="delta muted">{totals.revenue?Math.round(totals.fee/totals.revenue*100):0}% 佔比</span></div>
+                  <div className="stat"><span className="lab">實收淨額</span><span className="val mono-val" style={{ color:'var(--clay)' }}>{fmtMoney(Math.round(totals.net),true)}</span><span className="delta muted">扣除手續費</span></div>
+                  <div className="stat"><span className="lab">淨利</span><span className="val mono-val" style={{ color: totals.profit>=0?'var(--moss)':'var(--terracotta)' }}>{fmtMoney(Math.round(totals.profit),true)}</span><span className="delta muted">共 {totals.qty} 件</span></div>
                 </div>
               </div>
 
@@ -858,9 +873,8 @@ const ChannelsView = ({ state, setState }) => {
                 <div className="card-head"><div className="card-title">通路明細</div><div className="card-subtle">點卡片查看詳情</div></div>
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px,1fr))', gap:12 }}>
                   {list.map(c => {
-                    const feeAmt = c.fee_unit==='%' ? c.sales * c.fee/100 : c.orders * c.fee;
-                    const net = c.sales - feeAmt;
-                    const pct = totals.sales ? Math.round(c.sales/totals.sales*100) : 0;
+                    const s = statsOf(c.id);
+                    const pct = totals.revenue ? Math.round(s.revenue/totals.revenue*100) : 0;
                     const t = CHANNEL_TYPES.find(x=>x.v===c.type) || CHANNEL_TYPES[0];
                     return (
                       <div key={c.id} className="card flat" style={{ border:'1px solid var(--rule-soft)', padding:14, cursor:'pointer' }} onClick={()=>setDetailId(c.id)}>
@@ -870,14 +884,13 @@ const ChannelsView = ({ state, setState }) => {
                             <Pill tone={t.tone}>{t.l}</Pill>
                           </div>
                           <div style={{ textAlign:'right' }}>
-                            <div className="mono" style={{ fontSize:17, fontWeight:700, color:'var(--clay)' }}>{fmtMoney(c.sales,true)}</div>
-                            <div style={{ fontSize:10, color:'var(--ink-mute)' }}>{c.orders} 筆</div>
+                            <div className="mono" style={{ fontSize:17, fontWeight:700, color:'var(--clay)' }}>{fmtMoney(s.revenue,true)}</div>
+                            <div className="mono" style={{ fontSize:11, fontWeight:700, color: s.profit>=0?'var(--moss)':'var(--terracotta)' }}>淨利 {fmtMoney(Math.round(s.profit),true)}</div>
                           </div>
                         </div>
-                        <div className="bar" style={{ margin:'8px 0' }}><div className="bar-fill" style={{ width: (c.sales/maxSales*100)+'%' }}/></div>
                         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, padding:'8px 0 0', borderTop:'1px dashed var(--rule-soft)', fontSize:11 }}>
                           <div><span className="muted">抽成 </span><strong className="mono">{c.fee}{c.fee_unit}</strong></div>
-                          <div style={{ textAlign:'right' }}><span className="muted">淨收 </span><strong className="mono" style={{ color:'var(--moss)' }}>{fmtMoney(net,true)}</strong></div>
+                          <div style={{ textAlign:'right' }}><span className="muted">銷售 </span><strong className="mono">{s.qty} 件</strong></div>
                         </div>
                         {c.note && <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:8, lineHeight:1.5 }}>{c.note}</div>}
                         <div style={{ marginTop:8, fontSize:10, color:'var(--ink-faint)' }}>佔比 {pct}%</div>
@@ -917,11 +930,8 @@ const ChannelsView = ({ state, setState }) => {
               </select>
             </div>
           </div>
-          <div className="row">
-            <div className="field"><label>累計銷售額</label><input className="input mono" type="number" value={form.sales} onChange={e=>setForm({...form,sales:e.target.value})}/></div>
-            <div className="field"><label>訂單筆數</label><input className="input mono" type="number" value={form.orders} onChange={e=>setForm({...form,orders:e.target.value})}/></div>
-          </div>
           <div className="field"><label>備註</label><textarea className="textarea" value={form.note} onChange={e=>setForm({...form,note:e.target.value})}/></div>
+          <div style={{ fontSize:11, color:'var(--ink-mute)' }}>業績、淨利等數字改為自動從「月銷售」的實際登記資料計算，不用在這裡手動填寫。</div>
         </div>
       </Modal>
     </div>
