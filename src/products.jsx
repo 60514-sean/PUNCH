@@ -686,7 +686,7 @@ const QuotesView = ({ state, setState }) => {
     }));
   }, [current.myco, current.myAddress, current.myTaxId, current.myName, current.myPhone, current.myEmail, current.note]);
 
-  // 從指定清單（產品庫或選品配件）帶入，自動套用售價/成本/照片/級距
+  // 從指定清單帶入，自動套用售價/成本/照片/級距
   const pickFrom = (list, name) => {
     const p = (list||[]).find(x => x.name === name);
     if (!p) { setQItem(q => ({ ...q, name })); return; }
@@ -912,20 +912,6 @@ const QuotesView = ({ state, setState }) => {
                 }}>
                   <option value="">— 選擇已儲存產品 —</option>
                   {(state.products||[]).filter(p=>!p._deleted).map(p=>(
-                    <option key={p.id} value={p.name}>{p.name}{p.spec?` · ${p.spec}`:''}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="field" style={{ marginBottom:10 }}>
-                <label>從選品配件帶入（附加項目）</label>
-                <select className="select" value="" onChange={e=>{
-                  const name = e.target.value;
-                  if (!name) return;
-                  pickFrom(state.accessories, name);
-                  e.target.value = '';
-                }}>
-                  <option value="">— 選擇選品配件 —</option>
-                  {(state.accessories||[]).filter(p=>!p._deleted).map(p=>(
                     <option key={p.id} value={p.name}>{p.name}{p.spec?` · ${p.spec}`:''}</option>
                   ))}
                 </select>

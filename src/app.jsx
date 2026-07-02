@@ -17,7 +17,6 @@ const NAV = [
   { group:'資源', items:[
     { key:'inventory', label:'庫存管理', icon:'inventory' },
     { key:'product', label:'產品管理', icon:'product' },
-    { key:'accessory', label:'選品配件', icon:'product' },
   ]},
   { group:'財務', items:[
     { key:'finance', label:'收支控管', icon:'finance' },
@@ -252,7 +251,6 @@ function App(){
       case 'finance': return <FinanceView {...pageProps}/>;
       case 'inventory': return <InventoryView {...pageProps}/>;
       case 'product': return <ProductsView {...pageProps}/>;
-      case 'accessory': return <ProductsView {...pageProps} coll="accessories" viewTitle="選品配件" itemLabel="配件" showCostsTab={false}/>;
       case 'quote': return <QuotesView {...pageProps}/>;
       case 'crm': return <CRMView {...pageProps}/>;
       case 'channels': return <ChannelsView {...pageProps}/>;
