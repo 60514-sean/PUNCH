@@ -16,7 +16,7 @@ const NAV = [
   ]},
   { group:'資源', items:[
     { key:'inventory', label:'庫存管理', icon:'inventory' },
-    { key:'product', label:'產品成本', icon:'product' },
+    { key:'product', label:'產品管理', icon:'product' },
     { key:'accessory', label:'選品配件', icon:'product' },
   ]},
   { group:'財務', items:[

@@ -11,7 +11,7 @@ function tierForQty(tiers, qty) {
   return hit.length ? hit[0] : null;
 }
 
-const ProductsView = ({ state, setState, coll='products', sectionLabel='資源', viewTitle='產品成本分析', itemLabel='產品', showCostsTab=true }) => {
+const ProductsView = ({ state, setState, coll='products', sectionLabel='資源', viewTitle='產品管理', itemLabel='產品', showCostsTab=true }) => {
   const [tab, setTab] = useStateP('saved'); // saved | costs
   const [viewMode, setViewMode] = useStateP('grid'); // list | grid
   const [photoView, setPhotoView] = useStateP(''); // 點縮圖放大
@@ -26,8 +26,33 @@ const ProductsView = ({ state, setState, coll='products', sectionLabel='資源',
   // 編輯產品 modal 內各區塊收合狀態
   const [secOpen, setSecOpen] = useStateP({ direct:true, indirect:true, tiers:true });
   const toggleSec = (k) => setSecOpen(s => ({ ...s, [k]: !s[k] }));
+  // 產品 modal 內的庫存快速異動表單
+  const emptyStockAdj = () => ({ type:'add', qty:'', note:'', date:new Date().toISOString().slice(0,10) });
+  const [stockAdj, setStockAdj] = useStateP(emptyStockAdj());
+  const linkableStocks = state.stocks.filter(s=>!s._deleted && s.kind==='goods').sort((a,b)=>strokeCollatorCH.compare(a.name, b.name));
+  const linkedStock = state.stocks.find(s=>s.id===form.stockId && !s._deleted);
+  const applyStockAdj = () => {
+    if (!linkedStock) return;
+    const q = Number(stockAdj.qty)||0;
+    if (!q && stockAdj.type!=='set') { toast('請輸入數量'); return; }
+    const date = stockAdj.date || new Date().toISOString().slice(0,10);
+    setState(s=>{
+      const newStocks = s.stocks.map(x=>{
+        if (x.id!==linkedStock.id) return x;
+        let nq = x.qty;
+        if (stockAdj.type==='add') nq = x.qty + q;
+        else if (stockAdj.type==='sub') nq = Math.max(0, x.qty - q);
+        else nq = q;
+        return { ...x, qty: nq, updated: date };
+      });
+      const log = { id:uid(), stockId:linkedStock.id, name:linkedStock.name, type: stockAdj.type==='sub'?'out':(stockAdj.type==='add'?'in':'adj'), qty:q, note:stockAdj.note, date };
+      return { ...s, stocks:newStocks, logs:[log, ...s.logs] };
+    });
+    toast('庫存已更新');
+    setStockAdj(emptyStockAdj());
+  };
 
-  function emptyP(){ return { id:'', name:'', spec:'', photo:'', direct:0, indirect:0, directItems:[], indirectItems:[], price:'', minPrice:'', tiers:[] }; }
+  function emptyP(){ return { id:'', name:'', spec:'', photo:'', direct:0, indirect:0, directItems:[], indirectItems:[], price:'', minPrice:'', tiers:[], stockId:'' }; }
   function emptyCost(){ return { id:'', kind:'direct', name:'', unit:'', price:'' }; }
 
   // 升級舊版明細（只有 n + a）→ 新版（n + unit_q[量詞文字] + unit_p + qty + a）
@@ -40,8 +65,16 @@ const ProductsView = ({ state, setState, coll='products', sectionLabel='資源',
     a:      it.a      != null ? (Number(it.a)      || 0) : 0,
   }));
 
-  const openNew = () => { setForm(emptyP()); setEditingId(null); setModalOpen(true); };
-  const openEdit = (p) => { setForm({...p, directItems:upgradeItems(p.directItems), indirectItems:upgradeItems(p.indirectItems)}); setEditingId(p.id); setModalOpen(true); };
+  const openNew = () => { setForm(emptyP()); setEditingId(null); setStockAdj(emptyStockAdj()); setModalOpen(true); };
+  const openEdit = (p) => { setForm({...p, directItems:upgradeItems(p.directItems), indirectItems:upgradeItems(p.indirectItems)}); setEditingId(p.id); setStockAdj(emptyStockAdj()); setModalOpen(true); };
+  // 複製現有設定為新項目（不直接寫入資料，需按儲存才會新增）
+  const duplicateP = (p) => {
+    setForm({ ...p, id:'', name: p.name+'（複製）', stockId:'', directItems:upgradeItems(p.directItems), indirectItems:upgradeItems(p.indirectItems) });
+    setEditingId(null);
+    setStockAdj(emptyStockAdj());
+    setModalOpen(true);
+    toast('已複製設定，修改後按儲存即為新'+itemLabel);
+  };
 
   const sumItems = (arr) => (arr||[]).reduce((a,b)=>a+(Number(b.a)||0),0);
   const directSum = sumItems(form.directItems);
@@ -188,8 +221,10 @@ const ProductsView = ({ state, setState, coll='products', sectionLabel='資源',
                 const tc = p.direct + p.indirect;
                 const gross = p.price ? Math.round((p.price-p.direct)/p.price*100) : 0;
                 const net = p.price ? Math.round((p.price-tc)/p.price*100) : 0;
+                const st = p.stockId ? state.stocks.find(s=>s.id===p.stockId && !s._deleted) : null;
                 return (
-                  <div key={p.id} className="card flat" style={{ border:'1px solid var(--rule-soft)', padding:14, cursor:'pointer' }} onClick={()=>openEdit(p)}>
+                  <div key={p.id} className="card flat" style={{ border:'1px solid var(--rule-soft)', padding:14, cursor:'pointer', position:'relative' }} onClick={()=>openEdit(p)}>
+                    <button className="btn btn-ghost btn-sm" title="複製" style={{ position:'absolute', top:8, right:8, zIndex:1, padding:'4px 6px', background:'var(--paper)' }} onClick={(e)=>{ e.stopPropagation(); duplicateP(p); }}><Icon name="copy" size={12}/></button>
                     <div style={{ width:'100%', height:130, borderRadius:8, overflow:'hidden', background:'var(--paper-deep)', marginBottom:10, display:'flex', alignItems:'center', justifyContent:'center' }}>
                       {p.photo
                         ? <img src={cldThumb(p.photo, 400)} alt={p.name} style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
@@ -199,6 +234,7 @@ const ProductsView = ({ state, setState, coll='products', sectionLabel='資源',
                       <div style={{ minWidth:0, flex:1 }}>
                         <div style={{ fontSize:15, fontWeight:700, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden', lineHeight:1.3 }}>{p.name}</div>
                         {p.spec && <div style={{ fontSize:13, color:'var(--ink-mute)' }}>{p.spec}</div>}
+                        {st && <div style={{ fontSize:11, marginTop:4 }}><span className="muted">庫存 </span><strong className="mono" style={{ color: st.qty<=st.min?'var(--terracotta)':'var(--ink)' }}>{st.qty}</strong></div>}
                       </div>
                       <div className="mono" style={{ fontSize:17, fontWeight:700, color:'var(--clay)', flexShrink:0 }}>{fmtMoney(p.price)}</div>
                     </div>
@@ -230,6 +266,7 @@ const ProductsView = ({ state, setState, coll='products', sectionLabel='資源',
                   const tc = p.direct + p.indirect;
                   const gross = p.price ? Math.round((p.price-p.direct)/p.price*100) : 0;
                   const net = p.price ? Math.round((p.price-tc)/p.price*100) : 0;
+                  const st = p.stockId ? state.stocks.find(s=>s.id===p.stockId && !s._deleted) : null;
                   return (
                     <tr key={p.id}>
                       <td>
@@ -238,6 +275,7 @@ const ProductsView = ({ state, setState, coll='products', sectionLabel='資源',
                           <div style={{ minWidth:0 }}>
                             <div style={{ fontWeight:600 }}>{p.name}</div>
                             {p.spec && <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:2 }}>{p.spec}</div>}
+                            {st && <div style={{ fontSize:11, marginTop:2 }}><span className="muted">庫存 </span><strong className="mono" style={{ color: st.qty<=st.min?'var(--terracotta)':'var(--ink)' }}>{st.qty}</strong></div>}
                           </div>
                         </div>
                       </td>
@@ -250,6 +288,7 @@ const ProductsView = ({ state, setState, coll='products', sectionLabel='資源',
                       </td>
                       <td>
                         <div style={{ display:'flex', gap:4, justifyContent:'flex-end' }}>
+                          <button className="btn btn-ghost btn-sm" title="複製" onClick={()=>duplicateP(p)}><Icon name="copy" size={12}/></button>
                           <button className="btn btn-ghost btn-sm" title="編輯" onClick={()=>openEdit(p)}><Icon name="edit" size={12}/></button>
                         </div>
                       </td>
@@ -283,6 +322,7 @@ const ProductsView = ({ state, setState, coll='products', sectionLabel='資源',
                       <span style={{ fontSize:12 }}><span className="muted">淨利 </span><strong className="mono" style={{ color:'var(--clay)' }}>{net}%</strong></span>
                       {p.minPrice>0 && <span style={{ fontSize:11, color:'var(--ink-mute)' }}>底價 {fmtMoney(p.minPrice)}</span>}
                       <div style={{ flex:1 }}/>
+                      <button className="btn btn-ghost btn-sm" title="複製" onClick={()=>duplicateP(p)}><Icon name="copy" size={11}/></button>
                       <button className="btn btn-ghost btn-sm" title="編輯" onClick={()=>openEdit(p)}><Icon name="edit" size={11}/></button>
                     </div>
                   </div>
@@ -309,6 +349,7 @@ const ProductsView = ({ state, setState, coll='products', sectionLabel='資源',
                       </span>
                     </div>
                     <div className="text-row-actions">
+                      <button className="btn btn-ghost btn-sm" title="複製" style={{ padding:'4px 8px', fontSize:12 }} onClick={()=>duplicateP(p)}><Icon name="copy" size={11}/></button>
                       <button className="btn btn-ghost btn-sm" title="編輯" style={{ padding:'4px 8px', fontSize:12 }} onClick={()=>openEdit(p)}><Icon name="edit" size={11}/></button>
                     </div>
                   </div>
@@ -418,6 +459,38 @@ const ProductsView = ({ state, setState, coll='products', sectionLabel='資源',
             <div className="field"><label>售價<span className="req">*</span></label><input className="input mono" type="number" value={form.price} onChange={e=>setForm({...form,price:e.target.value})}/></div>
             <div className="field"><label>最低售價</label><input className="input mono" type="number" value={form.minPrice} onChange={e=>setForm({...form,minPrice:e.target.value})}/></div>
           </div>
+
+          {/* 庫存管理連結：同一頁看成本也看庫存 */}
+          <div style={{ padding:12, background:'var(--paper-deep)', borderRadius:8 }}>
+            <div style={{ fontSize:12, fontWeight:700, color:'var(--ink-soft)', marginBottom:8 }}>庫存管理連結</div>
+            <select className="select" value={form.stockId} onChange={e=>setForm({...form, stockId:e.target.value})}>
+              <option value="">— 不連結庫存品項 —</option>
+              {linkableStocks.map(s=><option key={s.id} value={s.id}>{s.name}（現有 {s.qty}）</option>)}
+            </select>
+            {form.stockId && !linkedStock && <div style={{ fontSize:11, color:'var(--terracotta)', marginTop:6 }}>找不到此庫存品項（可能已刪除），請重新連結</div>}
+            {linkedStock && (
+              <div style={{ marginTop:10, paddingTop:10, borderTop:'1px dashed var(--rule-soft)' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                  <div style={{ fontSize:12, color:'var(--ink-mute)' }}>目前庫存</div>
+                  <div className="mono" style={{ fontSize:18, fontWeight:700, color: linkedStock.qty<=linkedStock.min ? 'var(--terracotta)':'var(--ink)' }}>
+                    {linkedStock.qty} <span style={{ fontSize:11, color:'var(--ink-mute)', fontWeight:400 }}>/ 底線 {linkedStock.min} {linkedStock.unit}</span>
+                  </div>
+                </div>
+                <div style={{ display:'flex', gap:6, marginBottom:6 }}>
+                  {[['add','進貨 +'],['sub','出貨 -'],['set','盤點設為']].map(([v,l])=>(
+                    <button key={v} type="button" className={'btn btn-sm '+(stockAdj.type===v?'btn-ink':'btn-ghost')} style={{ flex:1 }} onClick={()=>setStockAdj({...stockAdj, type:v})}>{l}</button>
+                  ))}
+                </div>
+                <div className="row">
+                  <div className="field"><label>數量</label><input className="input mono" type="number" value={stockAdj.qty} onChange={e=>setStockAdj({...stockAdj,qty:e.target.value})}/></div>
+                  <div className="field"><label>日期</label><input className="input" type="date" value={stockAdj.date} onChange={e=>setStockAdj({...stockAdj,date:e.target.value})}/></div>
+                </div>
+                <div className="field"><label>備註</label><input className="input" value={stockAdj.note} onChange={e=>setStockAdj({...stockAdj,note:e.target.value})}/></div>
+                <button type="button" className="btn btn-ink btn-sm" style={{ width:'100%', marginTop:4 }} onClick={applyStockAdj}>套用庫存異動</button>
+              </div>
+            )}
+          </div>
+
           {/* Direct cost items */}
           <div style={{ padding:12, background:'var(--paper-deep)', borderRadius:8 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: secOpen.direct?8:0, cursor:'pointer' }} onClick={()=>toggleSec('direct')}>
