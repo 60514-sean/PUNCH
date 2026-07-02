@@ -10,6 +10,45 @@ const CHANNEL_TYPES = [
   { v:'wholesale', l:'批發', tone:'ink' },
 ];
 
+// ─── 圓餅圖：用 conic-gradient 呈現各項目佔比，中心顯示總額 ───
+const DonutChart = ({ segments, size=150, thickness=26, centerLabel, centerValue }) => {
+  const total = segments.reduce((a,s)=>a+Math.max(0,s.value),0);
+  let acc = 0;
+  const stops = total>0 ? segments.map(s => {
+    const start = acc/total*360;
+    acc += Math.max(0,s.value);
+    const end = acc/total*360;
+    return `${s.color} ${start}deg ${end}deg`;
+  }).join(', ') : null;
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:24, flexWrap:'wrap' }}>
+      <div style={{
+        width:size, height:size, borderRadius:'50%', flexShrink:0,
+        background: stops ? `conic-gradient(${stops})` : 'var(--paper-deep)',
+        display:'flex', alignItems:'center', justifyContent:'center',
+      }}>
+        <div style={{
+          width:size-thickness*2, height:size-thickness*2, borderRadius:'50%', background:'var(--paper-soft)',
+          display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', textAlign:'center',
+        }}>
+          <div style={{ fontSize:10, color:'var(--ink-mute)' }}>{centerLabel}</div>
+          <div className="mono" style={{ fontSize:16, fontWeight:700 }}>{centerValue}</div>
+        </div>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:8, minWidth:150 }}>
+        {segments.map(s=>(
+          <div key={s.label} style={{ display:'flex', alignItems:'center', gap:8, fontSize:12 }}>
+            <span style={{ width:10, height:10, borderRadius:3, background:s.color, flexShrink:0 }}/>
+            <span className="muted" style={{ flex:1 }}>{s.label}</span>
+            <strong className="mono">{fmtMoney(Math.round(s.value),true)}</strong>
+            <span style={{ color:'var(--ink-faint)', fontSize:11, width:32, textAlign:'right' }}>{total?Math.round(s.value/total*100):0}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // ─── 季節加權（1 = 平均水準），用於預估下月銷量 ───
 const SEASON_FACTOR = { 1:1.25, 2:1.1, 3:0.95, 4:0.95, 5:1.1, 6:0.9, 7:0.9, 8:0.9, 9:0.95, 10:1.0, 11:1.2, 12:1.35 };
 const seasonFactor = (m) => SEASON_FACTOR[m] || 1;
@@ -27,18 +66,33 @@ function last6MonthsCH() {
   return arr;
 }
 const monthLabelCH = (ymStr) => Number(ymStr.split('-')[1]) + '月';
+// 容錯：有些舊資料的 month 被存成完整 ISO 時間戳（如 2026-05-27T16:00:00.000Z），
+// 一律取前 7 碼正規化成 YYYY-MM，避免跟正規月份字串比對時完全不吻合。
+const monthKeyCH = (m) => String(m||'').slice(0,7);
 
-// 依「近 3 個月平均銷量 × 下月季節加權」估算進貨時機與建議數量
+// 依「近 6 個月平均銷量」為基礎，再用「歷年同月份真實銷售」校正季節係數，估算進貨時機與建議數量
+// 有歷年同月資料時優先採用真實數據；資料不足（沒有跨年紀錄）才退回通用季節加權表
 function predictItem(state, channelId, stockId) {
   const sales = (state.channelSales||[]).filter(x=>!x._deleted && x.channelId===channelId && x.stockId===stockId)
-    .sort((a,b)=>a.month.localeCompare(b.month));
+    .sort((a,b)=>monthKeyCH(a.month).localeCompare(monthKeyCH(b.month)));
   if (!sales.length) return null;
-  const recent = sales.slice(-3);
+  const recent = sales.slice(-6);
   const avgQty = recent.reduce((a,b)=>a+(Number(b.qty)||0),0)/recent.length;
-  const avgFactor = recent.reduce((a,b)=>a+seasonFactor(Number(b.month.split('-')[1])),0)/recent.length || 1;
   const now = new Date();
   const nextMonthNum = now.getMonth()+2 > 12 ? (now.getMonth()+2-12) : now.getMonth()+2;
-  const predictedQty = avgQty * (seasonFactor(nextMonthNum)/avgFactor);
+
+  const overallAvgQty = sales.reduce((a,b)=>a+(Number(b.qty)||0),0)/sales.length;
+  const sameMonthRecs = sales.filter(x=>Number(monthKeyCH(x.month).split('-')[1])===nextMonthNum);
+  let seasonalRatio, historyAvgQty = null;
+  if (sameMonthRecs.length>0 && overallAvgQty>0) {
+    historyAvgQty = sameMonthRecs.reduce((a,b)=>a+(Number(b.qty)||0),0)/sameMonthRecs.length;
+    seasonalRatio = historyAvgQty/overallAvgQty;
+  } else {
+    const avgFactor = recent.reduce((a,b)=>a+seasonFactor(Number(monthKeyCH(b.month).split('-')[1])),0)/recent.length || 1;
+    seasonalRatio = seasonFactor(nextMonthNum)/avgFactor;
+  }
+  const predictedQty = avgQty * seasonalRatio;
+
   const stockRow = (state.channelStock||[]).find(r=>r.channelId===channelId && r.stockId===stockId);
   const currentQty = stockRow ? stockRow.qty : 0;
   const dailyRate = predictedQty/30;
@@ -50,6 +104,8 @@ function predictItem(state, channelId, stockId) {
   return {
     currentQty,
     avgQty: Math.round(avgQty*10)/10,
+    historyAvgQty: historyAvgQty==null ? null : Math.round(historyAvgQty*10)/10,
+    historyYears: sameMonthRecs.length,
     predictedQty: Math.round(predictedQty*10)/10,
     daysLeft: daysLeft==null ? null : Math.round(daysLeft),
     restockDate,
@@ -97,6 +153,7 @@ function calcSaleProfit(channel, qty, revenue, unitCost) {
 // ═══ 通路詳情：庫存/進貨、月銷售、分析與預判 ═══
 const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
   const [subTab, setSubTab] = useStateCH('stock'); // stock | sales | analysis
+  const [yearView, setYearView] = useStateCH('all'); // 'all' 或 'YYYY'
   const [restockOpen, setRestockOpen] = useStateCH(false);
   const [restockForm, setRestockForm] = useStateCH({ stockId:'', newName:'', qty:'', cost:'', date:new Date().toISOString().slice(0,10), note:'' });
   const [restockEdit, setRestockEdit] = useStateCH(null);
@@ -231,7 +288,7 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
         const revenue = qty * price;
         const unitCost = channelAvgCost(state, channel.id, r.stockId);
         chStock = chStock.map(cr=> (cr.channelId===channel.id && cr.stockId===r.stockId) ? { ...cr, qty:Math.max(0, cr.qty-qty) } : cr);
-        return { id:uid(), channelId:channel.id, stockId:r.stockId, name:stockItem.name, month:saleMonth, qty, price, revenue, unitCost, note:r.note||'' };
+        return { id:uid(), channelId:channel.id, stockId:r.stockId, name:stockItem.name, month:monthKeyCH(saleMonth), qty, price, revenue, unitCost, note:r.note||'' };
       });
       return { ...s, channelSales: [...newRecs, ...(s.channelSales||[])], channelStock: chStock };
     });
@@ -241,7 +298,7 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
   const openSaleEdit = (rec) => {
     const price = rec.price!=null ? rec.price : (rec.qty ? Math.round((rec.revenue/rec.qty)*100)/100 : 0);
     const matchedProduct = saleProducts.find(p=>p.stockId===rec.stockId) || saleProducts.find(p=>p.name===rec.name);
-    setSaleEditForm({ id:rec.id, productId:matchedProduct?matchedProduct.id:'', stockId:rec.stockId, month:rec.month, qty:rec.qty, price, note:rec.note||'' });
+    setSaleEditForm({ id:rec.id, productId:matchedProduct?matchedProduct.id:'', stockId:rec.stockId, month:monthKeyCH(rec.month), qty:rec.qty, price, note:rec.note||'' });
     setSaleEditOpen(true);
   };
   const pickEditProduct = (productId) => {
@@ -285,8 +342,9 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
   const salesByMonth = useMemoCH(()=>{
     const map = new Map();
     salesWithProfit.forEach(r=>{
-      if (!map.has(r.month)) map.set(r.month, []);
-      map.get(r.month).push(r);
+      const mk = monthKeyCH(r.month);
+      if (!map.has(mk)) map.set(mk, []);
+      map.get(mk).push(r);
     });
     return Array.from(map.entries())
       .sort((a,b)=>b[0].localeCompare(a[0]))
@@ -299,15 +357,40 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
       }));
   }, [salesWithProfit]);
 
-  const revenueTrend = useMemoCH(()=>{
-    const months = last6MonthsCH();
-    return months.map(m=>({ key:m, label:monthLabelCH(m), value: salesWithProfit.filter(x=>x.month===m).reduce((a,b)=>a+(Number(b.revenue)||0),0) }));
+  // 依年份分組的業績/淨利/銷售件數，供「以年為單位查看」與「全部年份加總」使用
+  const years = useMemoCH(()=>{
+    const set = new Set(salesWithProfit.map(x=>monthKeyCH(x.month).slice(0,4)).filter(y=>y.length===4));
+    return Array.from(set).sort((a,b)=>b.localeCompare(a));
   }, [salesWithProfit]);
 
-  const profitTrend = useMemoCH(()=>{
-    const months = last6MonthsCH();
-    return months.map(m=>({ key:m, label:monthLabelCH(m), value: salesWithProfit.filter(x=>x.month===m).reduce((a,b)=>a+b.profit,0) }));
+  const yearlyStats = useMemoCH(()=>{
+    const map = new Map();
+    salesWithProfit.forEach(r=>{
+      const y = monthKeyCH(r.month).slice(0,4);
+      if (y.length!==4) return;
+      if (!map.has(y)) map.set(y, { year:y, revenue:0, profit:0, qty:0 });
+      const e = map.get(y);
+      e.revenue += Number(r.revenue)||0;
+      e.profit += r.profit;
+      e.qty += Number(r.qty)||0;
+    });
+    return Array.from(map.values()).sort((a,b)=>a.year.localeCompare(b.year));
   }, [salesWithProfit]);
+
+  const allTimeTotals = useMemoCH(()=>{
+    return yearlyStats.reduce((a,y)=>({ revenue:a.revenue+y.revenue, profit:a.profit+y.profit, qty:a.qty+y.qty }), { revenue:0, profit:0, qty:0 });
+  }, [yearlyStats]);
+
+  const yearMonthlyTrend = useMemoCH(()=>{
+    if (yearView==='all') return null;
+    const months = Array.from({length:12},(_,i)=>yearView+'-'+String(i+1).padStart(2,'0'));
+    return {
+      revenue: months.map(m=>({ key:m, label:monthLabelCH(m), value: salesWithProfit.filter(x=>monthKeyCH(x.month)===m).reduce((a,b)=>a+(Number(b.revenue)||0),0) })),
+      profit: months.map(m=>({ key:m, label:monthLabelCH(m), value: salesWithProfit.filter(x=>monthKeyCH(x.month)===m).reduce((a,b)=>a+b.profit,0) })),
+    };
+  }, [yearView, salesWithProfit]);
+
+  const yearStat = yearView==='all' ? allTimeTotals : (yearlyStats.find(y=>y.year===yearView) || { revenue:0, profit:0, qty:0 });
 
   const analysisRows = useMemoCH(()=>{
     return allItemPairsCH(state, channel.id).map(p=>{
@@ -316,6 +399,8 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
       return { stockId:p.stockId, name: stockItem?stockItem.name:'(已刪除品項)', pred };
     }).filter(r=>r.pred);
   }, [state, channel.id]);
+  const nextMonthNum = (()=>{ const n = new Date().getMonth()+2; return n>12 ? n-12 : n; })();
+  const nextMonthLabel = nextMonthNum + '月';
 
   const typeTag = CHANNEL_TYPES.find(t=>t.v===channel.type) || CHANNEL_TYPES[0];
 
@@ -440,31 +525,52 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
 
       {subTab==='analysis' && (
         <>
+          <Segmented
+            options={[{ value:'all', label:'全部年份' }, ...years.map(y=>({ value:y, label:y+'年' }))]}
+            value={yearView}
+            onChange={setYearView}
+          />
           <div className="card flat" style={{ padding:0 }}>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)' }} className="crm-stats">
-              <div className="stat"><span className="lab">本月業績（含稅）</span><span className="val mono-val">{fmtMoney(salesWithProfit.filter(x=>x.month===new Date().toISOString().slice(0,7)).reduce((a,b)=>a+(Number(b.revenue)||0),0),true)}</span></div>
-              <div className="stat"><span className="lab">本月淨利</span><span className="val mono-val" style={{ color:'var(--moss)' }}>{fmtMoney(Math.round(salesWithProfit.filter(x=>x.month===new Date().toISOString().slice(0,7)).reduce((a,b)=>a+b.profit,0)),true)}</span></div>
-              <div className="stat"><span className="lab">近6月累計淨利</span><span className="val mono-val" style={{ color:'var(--moss)' }}>{fmtMoney(Math.round(profitTrend.reduce((a,b)=>a+b.value,0)),true)}</span></div>
+              <div className="stat"><span className="lab">{yearView==='all'?'累計業績（含稅）':yearView+'年業績（含稅）'}</span><span className="val mono-val">{fmtMoney(yearStat.revenue,true)}</span></div>
+              <div className="stat"><span className="lab">{yearView==='all'?'累計淨利':yearView+'年淨利'}</span><span className="val mono-val" style={{ color: yearStat.profit>=0?'var(--moss)':'var(--terracotta)' }}>{fmtMoney(Math.round(yearStat.profit),true)}</span></div>
+              <div className="stat"><span className="lab">{yearView==='all'?'累計銷售件數':yearView+'年銷售件數'}</span><span className="val">{yearStat.qty} 件</span></div>
             </div>
           </div>
+          {yearView==='all' ? (
+            <>
+              <div className="card">
+                <div className="card-head"><div className="card-title">各年度業績</div><div className="card-subtle">含稅金額</div></div>
+                {yearlyStats.length>0 ? <BarList items={yearlyStats.map(y=>({ label:y.year+'年', value:Math.round(y.revenue) }))} color="var(--clay)"/> : <EmptyState icon="channel" title="尚無業績資料"/>}
+              </div>
+              <div className="card">
+                <div className="card-head"><div className="card-title">各年度淨利</div><div className="card-subtle">毛利(含稅) − 稅 − 進貨成本</div></div>
+                {yearlyStats.length>0 ? <BarList items={yearlyStats.map(y=>({ label:y.year+'年', value:Math.round(y.profit) }))} color="var(--moss)"/> : <EmptyState icon="channel" title="尚無業績資料"/>}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="card">
+                <div className="card-head"><div className="card-title">{yearView} 年各月業績趨勢</div><div className="card-subtle">含稅金額</div></div>
+                <Sparkline data={yearMonthlyTrend.revenue.map(m=>m.value)} labels={yearMonthlyTrend.revenue.map(m=>m.label)} color="var(--clay)"/>
+              </div>
+              <div className="card">
+                <div className="card-head"><div className="card-title">{yearView} 年各月淨利趨勢</div><div className="card-subtle">毛利(含稅) − 稅 − 進貨成本</div></div>
+                <Sparkline data={yearMonthlyTrend.profit.map(m=>m.value)} labels={yearMonthlyTrend.profit.map(m=>m.label)} color="var(--moss)"/>
+              </div>
+            </>
+          )}
           <div className="card">
-            <div className="card-head"><div className="card-title">近 6 個月業績趨勢</div><div className="card-subtle">含稅金額</div></div>
-            <Sparkline data={revenueTrend.map(m=>m.value)} labels={revenueTrend.map(m=>m.label)} color="var(--clay)"/>
-          </div>
-          <div className="card">
-            <div className="card-head"><div className="card-title">近 6 個月淨利趨勢</div><div className="card-subtle">毛利(含稅) − 稅 − 進貨成本</div></div>
-            <Sparkline data={profitTrend.map(m=>m.value)} labels={profitTrend.map(m=>m.label)} color="var(--moss)"/>
-          </div>
-          <div className="card">
-            <div className="card-head"><div className="card-title">品項進貨預判</div><div className="card-subtle">依近 3 月銷量與季節指數估算</div></div>
+            <div className="card-head"><div className="card-title">品項進貨預判</div><div className="card-subtle">近6月銷量為基準，並用歷年同月真實銷售校正季節性</div></div>
             <table className="tbl desk-only">
-              <thead><tr><th>品項</th><th style={{ textAlign:'right' }}>目前庫存</th><th style={{ textAlign:'right' }}>近3月均銷</th><th style={{ textAlign:'right' }}>預估下月銷量</th><th style={{ textAlign:'right' }}>可撐天數</th><th style={{ textAlign:'right' }}>建議進貨量</th><th>建議進貨日</th></tr></thead>
+              <thead><tr><th>品項</th><th style={{ textAlign:'right' }}>目前庫存</th><th style={{ textAlign:'right' }}>近6月均銷</th><th style={{ textAlign:'right' }}>歷年{nextMonthLabel}均銷</th><th style={{ textAlign:'right' }}>預估下月銷量</th><th style={{ textAlign:'right' }}>可撐天數</th><th style={{ textAlign:'right' }}>建議進貨量</th><th>建議進貨日</th></tr></thead>
               <tbody>
                 {analysisRows.map(r=>(
                   <tr key={r.stockId}>
                     <td style={{ fontWeight:600 }}>{r.name}</td>
                     <td className="num">{r.pred.currentQty}</td>
                     <td className="num">{r.pred.avgQty}</td>
+                    <td className="num">{r.pred.historyAvgQty==null?'--':`${r.pred.historyAvgQty}（${r.pred.historyYears}年）`}</td>
                     <td className="num">{r.pred.predictedQty}</td>
                     <td className="num" style={{ color: r.pred.daysLeft!=null && r.pred.daysLeft<=14 ? 'var(--terracotta)':'var(--ink)' }}>{r.pred.daysLeft==null?'--':r.pred.daysLeft+' 天'}</td>
                     <td className="num" style={{ fontWeight:700 }}>{r.pred.suggestedQty}</td>
@@ -479,7 +585,8 @@ const ChannelDetail = ({ channel, state, setState, onBack, onEdit }) => {
                   <div style={{ fontWeight:700, marginBottom:6 }}>{r.name}</div>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, fontSize:12 }}>
                     <div className="muted">目前庫存 <b>{r.pred.currentQty}</b></div>
-                    <div className="muted">近3月均銷 <b>{r.pred.avgQty}</b></div>
+                    <div className="muted">近6月均銷 <b>{r.pred.avgQty}</b></div>
+                    <div className="muted">歷年{nextMonthLabel}均銷 <b>{r.pred.historyAvgQty==null?'--':r.pred.historyAvgQty}</b></div>
                     <div className="muted">可撐天數 <b style={{ color: r.pred.daysLeft!=null && r.pred.daysLeft<=14?'var(--terracotta)':undefined }}>{r.pred.daysLeft==null?'--':r.pred.daysLeft+'天'}</b></div>
                     <div className="muted">建議進貨 <b>{r.pred.suggestedQty}</b></div>
                   </div>
@@ -703,8 +810,8 @@ const ChannelsAnalysis = ({ state, channels }) => {
   }).sort((a,b)=>b.revenue-a.revenue);
   const byChannelProfit = [...byChannel].sort((a,b)=>b.profit-a.profit);
 
-  const monthlyTotal = months.map(m=>({ key:m, label:monthLabelCH(m), value: salesWithProfit.filter(x=>x.month===m).reduce((a,b)=>a+(Number(b.revenue)||0),0) }));
-  const monthlyProfit = months.map(m=>({ key:m, label:monthLabelCH(m), value: salesWithProfit.filter(x=>x.month===m).reduce((a,b)=>a+b.profit,0) }));
+  const monthlyTotal = months.map(m=>({ key:m, label:monthLabelCH(m), value: salesWithProfit.filter(x=>monthKeyCH(x.month)===m).reduce((a,b)=>a+(Number(b.revenue)||0),0) }));
+  const monthlyProfit = months.map(m=>({ key:m, label:monthLabelCH(m), value: salesWithProfit.filter(x=>monthKeyCH(x.month)===m).reduce((a,b)=>a+b.profit,0) }));
 
   const byType = CHANNEL_TYPES.map(t=>({
     label:t.l,
@@ -801,23 +908,25 @@ const ChannelsView = ({ state, setState }) => {
   const channelStats = useMemoCH(()=>{
     return list.map(c => {
       const recs = (state.channelSales||[]).filter(x=>!x._deleted && x.channelId===c.id);
-      let revenue = 0, profit = 0, fee = 0, qty = 0;
+      let revenue = 0, profit = 0, fee = 0, cost = 0, tax = 0, qty = 0;
       recs.forEach(x => {
         const unitCost = x.unitCost!=null ? x.unitCost : channelAvgCost(state, c.id, x.stockId);
         const p = calcSaleProfit(c, x.qty, x.revenue, unitCost);
         revenue += Number(x.revenue)||0;
         profit += p.profit;
         fee += p.fee;
+        cost += p.cost;
+        tax += p.tax;
         qty += Number(x.qty)||0;
       });
-      return { id:c.id, revenue, profit, fee, qty };
+      return { id:c.id, revenue, profit, fee, cost, tax, qty };
     });
   }, [list, state.channelSales, state]);
-  const statsOf = (id) => channelStats.find(s=>s.id===id) || { revenue:0, profit:0, fee:0, qty:0 };
+  const statsOf = (id) => channelStats.find(s=>s.id===id) || { revenue:0, profit:0, fee:0, cost:0, tax:0, qty:0 };
 
   const totals = useMemoCH(()=>{
-    const t = { revenue:0, profit:0, fee:0, qty:0 };
-    channelStats.forEach(s => { t.revenue += s.revenue; t.profit += s.profit; t.fee += s.fee; t.qty += s.qty; });
+    const t = { revenue:0, profit:0, fee:0, cost:0, tax:0, qty:0 };
+    channelStats.forEach(s => { t.revenue += s.revenue; t.profit += s.profit; t.fee += s.fee; t.cost += s.cost; t.tax += s.tax; t.qty += s.qty; });
     return { ...t, net: t.revenue - t.fee };
   }, [channelStats]);
 
@@ -870,30 +979,44 @@ const ChannelsView = ({ state, setState }) => {
               </div>
 
               <div className="card">
+                <div className="card-head"><div className="card-title">營收結構</div><div className="card-subtle">通路抽成／產品成本／稅金／最後利潤佔比</div></div>
+                {totals.revenue>0 ? (
+                  <DonutChart
+                    centerLabel="總營收"
+                    centerValue={fmtMoney(totals.revenue,true)}
+                    segments={[
+                      { label:'通路抽成', value:totals.fee, color:'var(--terracotta)' },
+                      { label:'產品成本', value:totals.cost, color:'var(--ochre)' },
+                      { label:'稅金', value:totals.tax, color:'var(--ink-faint)' },
+                      { label:'最後利潤', value:totals.profit, color:'var(--moss)' },
+                    ]}
+                  />
+                ) : (
+                  <EmptyState icon="channel" title="尚無業績資料" hint="於各通路登記月銷售後即可看到營收結構"/>
+                )}
+              </div>
+
+              <div className="card">
                 <div className="card-head"><div className="card-title">通路明細</div><div className="card-subtle">點卡片查看詳情</div></div>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px,1fr))', gap:12 }}>
+                <div className="channel-grid">
                   {list.map(c => {
                     const s = statsOf(c.id);
                     const pct = totals.revenue ? Math.round(s.revenue/totals.revenue*100) : 0;
                     const t = CHANNEL_TYPES.find(x=>x.v===c.type) || CHANNEL_TYPES[0];
                     return (
-                      <div key={c.id} className="card flat" style={{ border:'1px solid var(--rule-soft)', padding:14, cursor:'pointer' }} onClick={()=>setDetailId(c.id)}>
-                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
-                          <div style={{ minWidth:0, flex:1 }}>
-                            <div style={{ fontFamily:'var(--f-serif)', fontSize:16, fontWeight:600 }}>{c.name}</div>
-                            <Pill tone={t.tone}>{t.l}</Pill>
-                          </div>
-                          <div style={{ textAlign:'right' }}>
-                            <div className="mono" style={{ fontSize:17, fontWeight:700, color:'var(--clay)' }}>{fmtMoney(s.revenue,true)}</div>
-                            <div className="mono" style={{ fontSize:11, fontWeight:700, color: s.profit>=0?'var(--moss)':'var(--terracotta)' }}>淨利 {fmtMoney(Math.round(s.profit),true)}</div>
-                          </div>
+                      <div key={c.id} className="card flat" style={{ border:'1px solid var(--rule-soft)', padding:14, cursor:'pointer', aspectRatio:'1 / 1', display:'flex', flexDirection:'column', overflow:'hidden' }} onClick={()=>setDetailId(c.id)}>
+                        <div style={{ fontFamily:'var(--f-serif)', fontSize:16, fontWeight:600, lineHeight:1.3, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{c.name}</div>
+                        <div style={{ marginTop:6 }}><Pill tone={t.tone}>{t.l}</Pill></div>
+                        <div style={{ flex:1 }}/>
+                        <div>
+                          <div className="mono" style={{ fontSize:19, fontWeight:700, color:'var(--clay)' }}>{fmtMoney(s.revenue,true)}</div>
+                          <div className="mono" style={{ fontSize:12, fontWeight:700, color: s.profit>=0?'var(--moss)':'var(--terracotta)' }}>淨利 {fmtMoney(Math.round(s.profit),true)}</div>
                         </div>
-                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, padding:'8px 0 0', borderTop:'1px dashed var(--rule-soft)', fontSize:11 }}>
+                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, padding:'8px 0 0', marginTop:8, borderTop:'1px dashed var(--rule-soft)', fontSize:11 }}>
                           <div><span className="muted">抽成 </span><strong className="mono">{c.fee}{c.fee_unit}</strong></div>
                           <div style={{ textAlign:'right' }}><span className="muted">銷售 </span><strong className="mono">{s.qty} 件</strong></div>
                         </div>
-                        {c.note && <div style={{ fontSize:11, color:'var(--ink-mute)', marginTop:8, lineHeight:1.5 }}>{c.note}</div>}
-                        <div style={{ marginTop:8, fontSize:10, color:'var(--ink-faint)' }}>佔比 {pct}%</div>
+                        <div style={{ marginTop:6, fontSize:10, color:'var(--ink-faint)' }}>佔比 {pct}%</div>
                       </div>
                     );
                   })}

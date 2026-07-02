@@ -723,6 +723,12 @@ body.forced-mobile .mob-cards { display: flex !important; }
   }
 }
 
+/* 通路卡片：手機維持兩欄並排的正方形 */
+.channel-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap:12px; }
+@media (max-width: 900px) {
+  .channel-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 8px; }
+}
+
 /* ═══ 全域識讀性保底 ═══ */
 
 /* mob-card 內文字最小 13px */
